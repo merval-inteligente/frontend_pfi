@@ -1,22 +1,41 @@
 {
   "expo": {
-    "name": "blank-mobile-app",
-    "slug": "blank-mobile-app",
+    "name": "MERVAL Guide",
+    "slug": "merval-guide",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "blankmobileapp",
+    "scheme": "mervalguide",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#8CD279"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nicolas.mervalguide",
+      "buildNumber": "1",
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#8CD279",
+        "tabletImage": "./assets/images/splash-icon.png"
+      },
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "background-fetch"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#8CD279"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.nicolas.mervalguide"
     },
     "web": {
       "bundler": "metro",
@@ -24,16 +43,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
-        }
-      ]
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true
