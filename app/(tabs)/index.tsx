@@ -220,6 +220,35 @@ export default function HomeScreen() {
           </ImageBackground>
         </View>
 
+        {/* News Section */}
+        <View style={styles.exploreSectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Noticias</Text>
+        </View>
+        
+        {displayedNews.map((newsItem) => (
+          <View key={newsItem.id} style={{ paddingHorizontal: 16 }}>
+            <NewsCard news={newsItem} />
+          </View>
+        ))}
+        
+        {news.length > 2 && (
+          <View style={{ paddingHorizontal: 16 }}>
+            <TouchableOpacity 
+              style={[styles.showMoreButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              onPress={() => setShowAllNews(!showAllNews)}
+            >
+              <Text style={[styles.showMoreText, { color: colors.text }]}>
+                {showAllNews ? `Ver menos` : `Ver ${news.length - 2} noticias más`}
+              </Text>
+              <Ionicons 
+                name={showAllNews ? "chevron-up" : "chevron-down"} 
+                size={16} 
+                color={colors.text} 
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Stocks Section */}
         <View style={styles.exploreSectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Mis Preferencias</Text>
@@ -266,35 +295,6 @@ export default function HomeScreen() {
               onPress={() => router.push('/(tabs)/preferences')}
             >
               <Text style={styles.addPreferencesText}>Agregar Preferencias</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* News Section */}
-        <View style={styles.exploreSectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Noticias</Text>
-        </View>
-        
-        {displayedNews.map((newsItem) => (
-          <View key={newsItem.id} style={{ paddingHorizontal: 16 }}>
-            <NewsCard news={newsItem} />
-          </View>
-        ))}
-        
-        {news.length > 2 && (
-          <View style={{ paddingHorizontal: 16 }}>
-            <TouchableOpacity 
-              style={[styles.showMoreButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-              onPress={() => setShowAllNews(!showAllNews)}
-            >
-              <Text style={[styles.showMoreText, { color: colors.text }]}>
-                {showAllNews ? `Ver menos` : `Ver ${news.length - 2} noticias más`}
-              </Text>
-              <Ionicons 
-                name={showAllNews ? "chevron-up" : "chevron-down"} 
-                size={16} 
-                color={colors.text} 
-              />
             </TouchableOpacity>
           </View>
         )}

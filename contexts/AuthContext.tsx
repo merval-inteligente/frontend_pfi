@@ -1,4 +1,5 @@
-import { AuthService, User } from '@/services/mockData';
+import { getProfile, signIn, signUp } from '@/controller/apiController';
+import { User } from '@/services/mockData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
@@ -43,9 +44,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadUserSession = async () => {
     try {
       const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
+      const storedToken = await AsyncStorage.getItem('@auth_token');
+      
+      if (storedUser && storedToken) {
+        try {
+          // Verificar si el token sigue siendo válido obteniendo el perfil del backend
+          const response = await getProfile(storedToken);
+          
+          if (response.success && response.data) {
+            const userData = response.data.user;
+            
+            // Adaptar estructura del usuario desde el backend
+            const adaptedUser: User = {
+              id: userData.id,
+              name: userData.name,
+              email: userData.email,
+              avatar: userData.avatar?.url || undefined,
+              preferences: userData.preferences || {
+                favoriteStocks: [],
+                watchlist: [],
+                notifications: true,
+                theme: 'system'
+              },
+              createdAt: userData.createdAt || new Date().toISOString(),
+              lastLogin: userData.lastLogin || new Date().toISOString()
+            };
+            
+            setUser(adaptedUser);
+            await saveUserSession(adaptedUser);
+          } else {
+            // Token inválido - limpiar datos
+            throw new Error('Token inválido');
+          }
+        } catch {
+          console.log('Token inválido o expirado, limpiando sesión');
+          await AsyncStorage.removeItem(USER_STORAGE_KEY);
+          await AsyncStorage.removeItem('@auth_token');
+          setUser(null);
+        }
       }
     } catch (error) {
       console.error('Error loading user session:', error);
@@ -97,18 +133,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setIsLoading(true);
       console.log('Login called with rememberCredentials:', rememberCredentials);
-      const userData = await AuthService.login(email, password);
-      setUser(userData);
-      await saveUserSession(userData);
       
-      if (rememberCredentials) {
-        console.log('Saving credentials for:', email);
-        await saveCredentials(email, password);
+      // Usar la función signIn del backend real
+      const response = await signIn({ email, password });
+
+      // El backend devuelve: { success: true, message: "...", data: { user: {...}, token: "..." } }
+      if (response.success && response.data) {
+        const userData = response.data.user;
+        const token = response.data.token;
+        
+        // Guardar token JWT
+        await AsyncStorage.setItem('@auth_token', token);
+        
+        // Adaptar estructura del usuario para el frontend
+        const adaptedUser: User = {
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          avatar: userData.avatar?.url || undefined,
+          preferences: userData.preferences || {
+            favoriteStocks: [],
+            watchlist: [],
+            notifications: true,
+            theme: 'system'
+          },
+          createdAt: userData.createdAt || new Date().toISOString(),
+          lastLogin: userData.lastLogin || new Date().toISOString()
+        };
+        
+        setUser(adaptedUser);
+        await saveUserSession(adaptedUser);
+        
+        if (rememberCredentials) {
+          console.log('Saving credentials for:', email);
+          await saveCredentials(email, password);
+        } else {
+          console.log('Clearing saved credentials');
+          await clearSavedCredentials();
+        }
       } else {
-        console.log('Clearing saved credentials');
-        await clearSavedCredentials();
+        throw new Error(response.message || 'Error en el login');
       }
     } catch (error) {
+      console.error('Error en login:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -118,10 +185,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = async (email: string, password: string, name: string) => {
     try {
       setIsLoading(true);
-      const userData = await AuthService.register(email, password, name);
-      setUser(userData);
-      await saveUserSession(userData);
+      
+      // Usar la función signUp del backend real
+      const response = await signUp({
+        email,
+        password,
+        name,
+        acceptTerms: true // Siempre true cuando llega aquí
+      });
+
+      // El backend devuelve: { success: true, message: "...", data: { user: {...}, token: "..." } }
+      if (response.success && response.data) {
+        const userData = response.data.user;
+        const token = response.data.token;
+        
+        // Guardar token JWT
+        await AsyncStorage.setItem('@auth_token', token);
+        
+        // Adaptar estructura del usuario para el frontend
+        const adaptedUser: User = {
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          avatar: userData.avatar?.url || undefined, // URL de Cloudinary o undefined
+          preferences: userData.preferences || {
+            favoriteStocks: [],
+            watchlist: [],
+            notifications: true,
+            theme: 'system'
+          },
+          createdAt: userData.createdAt || new Date().toISOString(),
+          lastLogin: userData.lastLogin || new Date().toISOString()
+        };
+        
+        setUser(adaptedUser);
+        await saveUserSession(adaptedUser);
+      } else {
+        throw new Error(response.message || 'Error en el registro');
+      }
     } catch (error) {
+      console.error('Error en registro:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -132,8 +235,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       // First set user to null to immediately update UI
       setUser(null);
-      // Then clear storage
+      // Then clear storage (incluyendo token JWT)
       await AsyncStorage.removeItem(USER_STORAGE_KEY);
+      await AsyncStorage.removeItem('@auth_token');
       // Also clear saved credentials when logging out
       await clearSavedCredentials();
     } catch (error) {

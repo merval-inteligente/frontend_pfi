@@ -5,14 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 type OnboardingStep = 'register' | 'knowledge' | 'risk' | 'sectors' | 'welcome';
@@ -76,6 +76,18 @@ export default function RegisterScreen() {
     } else if (currentStep === 'sectors') {
       // Completar registro y login
       completeRegistration();
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep === 'knowledge') {
+      setCurrentStep('welcome');
+    } else if (currentStep === 'risk') {
+      setCurrentStep('knowledge');
+    } else if (currentStep === 'sectors') {
+      setCurrentStep('risk');
+    } else if (currentStep === 'welcome') {
+      setCurrentStep('register');
     }
   };
 
@@ -261,6 +273,12 @@ export default function RegisterScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Bienvenido</Text>
         </View>
 
@@ -296,6 +314,12 @@ export default function RegisterScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Conocimiento de Inversión</Text>
         </View>
 
@@ -348,6 +372,12 @@ export default function RegisterScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Apetito de Riesgo</Text>
         </View>
 
@@ -405,39 +435,77 @@ export default function RegisterScreen() {
       'Salud'
     ];
 
+    const toggleSector = (sector: string) => {
+      const currentSectors = onboardingData.sectors;
+      if (currentSectors.includes(sector)) {
+        // Quitar sector si ya está seleccionado
+        updateOnboardingData('sectors', currentSectors.filter(s => s !== sector));
+      } else {
+        // Agregar sector si no está seleccionado
+        updateOnboardingData('sectors', [...currentSectors, sector]);
+      }
+    };
+
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Sectores Disponibles</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Sectores de Interés</Text>
         </View>
 
         <View style={styles.onboardingContent}>
           <View style={styles.onboardingMain}>
             <Text style={[styles.onboardingTitle, { color: colors.text }]}>
-              Estos son los sectores disponibles
+              Selecciona tus sectores de interés
             </Text>
             <Text style={[styles.onboardingDescription, { color: colors.text }]}>
-              Podrás explorar y agregar tus preferencias más adelante en la app
+              Puedes seleccionar múltiples sectores. Esto nos ayudará a personalizar tu experiencia.
             </Text>
             
             <View style={styles.sectorListContainer}>
-              {sectorOptions.map((sector) => (
-                <View
-                  key={sector}
-                  style={[styles.sectorItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                >
-                  <Text style={[styles.sectorText, { color: colors.text }]}>
-                    {sector}
-                  </Text>
-                </View>
-              ))}
+              {sectorOptions.map((sector) => {
+                const isSelected = onboardingData.sectors.includes(sector);
+                return (
+                  <TouchableOpacity
+                    key={sector}
+                    style={[
+                      styles.sectorItem, 
+                      { 
+                        backgroundColor: isSelected ? '#8CD279' : colors.card, 
+                        borderColor: isSelected ? '#8CD279' : colors.cardBorder,
+                        borderWidth: 2
+                      }
+                    ]}
+                    onPress={() => toggleSector(sector)}
+                  >
+                    <View style={styles.sectorContent}>
+                      <Text style={[
+                        styles.sectorText, 
+                        { color: isSelected ? '#131612' : colors.text }
+                      ]}>
+                        {sector}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={24} color="#131612" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             
             <TouchableOpacity 
               style={[styles.primaryButton, { backgroundColor: '#8CD279' }]}
               onPress={handleNext}
             >
-              <Text style={styles.primaryButtonText}>Finalizar</Text>
+              <Text style={styles.primaryButtonText}>
+                {onboardingData.sectors.length > 0 ? 'Finalizar' : 'Omitir por ahora'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -462,7 +530,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 35,
+    paddingTop: 60, // Aumentado de 35 a 60 para evitar que la cámara tape los títulos
     paddingBottom: 16,
     justifyContent: 'center',
   },
@@ -661,6 +729,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 8,
+  },
+  sectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectorText: {
     fontSize: 16,
