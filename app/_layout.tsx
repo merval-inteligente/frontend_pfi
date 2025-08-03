@@ -25,6 +25,7 @@ function RootLayoutContent() {
         <Stack.Screen name="alerts-config" options={{ headerShown: false }} />
         <Stack.Screen name="investment-strategy" options={{ headerShown: false }} />
         <Stack.Screen name="help-center" options={{ headerShown: false }} />
+        <Stack.Screen name="stock-detail" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

@@ -96,12 +96,6 @@ export default function TabLayout() {
           href: null, // Hide this tab - accessed via navigation
         }}
       />
-      <Tabs.Screen
-        name="stock-detail"
-        options={{
-          href: null, // Hide this tab - accessed via navigation
-        }}
-      />
     </Tabs>
   );
 }

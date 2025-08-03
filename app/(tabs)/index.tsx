@@ -1,8 +1,10 @@
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getStocks, getUserFavorites } from '@/controller/apiController';
 import { MarketData, MarketService, NewsItem as MockNewsItem, NewsService, Stock, StockService } from '@/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -128,7 +130,7 @@ const NewsCard = ({ news }: { news: MockNewsItem }) => {
 
 export default function HomeScreen() {
   const { colorScheme } = useTheme();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const colors = Colors[colorScheme];
   
   const [userStocks, setUserStocks] = useState<Stock[]>([]);
@@ -138,18 +140,75 @@ export default function HomeScreen() {
   const [showAllStocks, setShowAllStocks] = useState(false);
   const [showAllNews, setShowAllNews] = useState(false);
 
+  // Función para obtener el token almacenado
+  const getStoredToken = async (): Promise<string | null> => {
+    try {
+      const token = await AsyncStorage.getItem('@auth_token');
+      return token;
+    } catch (error) {
+      console.error('Error obteniendo token:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     loadData();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {
       setIsLoading(true);
       
-      // Load user's favorite stocks
-      if (user?.preferences.favoriteStocks) {
-        const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
-        setUserStocks(stocks);
+      // Load user's favorite stocks from backend if authenticated
+      if (isAuthenticated) {
+        try {
+          // Obtener token almacenado
+          const token = await getStoredToken();
+          if (token) {
+            // Obtener favoritos del usuario
+            const favoritesResponse = await getUserFavorites(token);
+            const userFavoriteSymbols = favoritesResponse.favorites?.favoriteStocks || [];
+            
+            if (userFavoriteSymbols.length > 0) {
+              // Obtener todos los stocks desde el backend
+              const stocksResponse = await getStocks(token);
+              
+              // Filtrar solo los stocks que están en favoritos
+              const favoriteStocks = stocksResponse.stocks
+                .filter((stock: any) => userFavoriteSymbols.includes(stock.symbol))
+                .map((stock: any) => ({
+                  id: stock.symbol,
+                  symbol: stock.symbol,
+                  name: stock.name,
+                  sector: stock.sector,
+                  currentPrice: Math.floor(Math.random() * 1000) + 100, // Precio simulado por ahora
+                  percentageChange: (Math.random() - 0.5) * 10, // Cambio porcentual simulado
+                }));
+              
+              setUserStocks(favoriteStocks);
+            } else {
+              setUserStocks([]);
+            }
+          } else {
+            // Fallback a datos mock si no hay token
+            if (user?.preferences.favoriteStocks) {
+              const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
+              setUserStocks(stocks);
+            }
+          }
+        } catch {
+          // Fallback a datos mock en caso de error
+          if (user?.preferences.favoriteStocks) {
+            const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
+            setUserStocks(stocks);
+          }
+        }
+      } else {
+        // Usuario no autenticado, usar datos mock
+        if (user?.preferences.favoriteStocks) {
+          const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
+          setUserStocks(stocks);
+        }
       }
       
       // Load news
@@ -298,51 +357,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* Explore More Actions */}
-        <View style={styles.exploreSection}>
-          <View style={styles.exploreSectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Información del Mercado</Text>
-            <TouchableOpacity 
-              style={[styles.exploreButton, { backgroundColor: colors.tint }]}
-              onPress={() => router.push('/(tabs)/explore')}
-            >
-              <Text style={styles.exploreButtonText}>Explorar</Text>
-              <Ionicons name="arrow-forward" size={16} color="white" />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={[styles.exploreCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <View style={styles.exploreContent}>
-              <View style={styles.exploreIcon}>
-                <Ionicons name="trending-up" size={32} color={colors.tint} />
-              </View>
-              <View style={styles.exploreText}>
-                <Text style={[styles.exploreTitle, { color: colors.text }]}>
-                  Descubre información del mercado
-                </Text>
-                <Text style={[styles.exploreDescription, { color: colors.subtitle }]}>
-                  Explora las acciones del MERVAL, filtra por sectores y mantente informado sobre el mercado
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.exploreStats}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: colors.tint }]}>25+</Text>
-                <Text style={[styles.statLabel, { color: colors.subtitle }]}>Acciones</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: colors.tint }]}>7</Text>
-                <Text style={[styles.statLabel, { color: colors.subtitle }]}>Sectores</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: colors.tint }]}>⭐</Text>
-                <Text style={[styles.statLabel, { color: colors.subtitle }]}>Favoritos</Text>
-              </View>
-            </View>
-          </View>
-        </View>
 
         {/* Market Sentiment */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Sentimiento del Mercado</Text>
@@ -595,10 +609,7 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 20,
   },
-  // Estilos para la sección de explorar
-  exploreSection: {
-    marginBottom: 24,
-  },
+  // Estilos para headers de sección
   exploreSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -618,49 +629,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
-  },
-  exploreCard: {
-    marginHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-  },
-  exploreContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  exploreIcon: {
-    marginRight: 16,
-    padding: 8,
-  },
-  exploreText: {
-    flex: 1,
-  },
-  exploreTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  exploreDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  exploreStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    textAlign: 'center',
   },
   editPreferencesButton: {
     flexDirection: 'row',

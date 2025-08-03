@@ -10,6 +10,23 @@ const urlWebServices = {
   getProfile: urlApi + 'api/auth/profile',
   updateProfile: urlApi + 'api/auth/profile',
   updateProfileImage: urlApi + 'api/auth/avatar',
+  
+  // User Preferences - ENDPOINTS IMPLEMENTADOS ✅
+  getUserPreferences: urlApi + 'api/user/preferences',
+  updateUserPreferences: urlApi + 'api/user/preferences', // PUT
+  patchUserPreferences: urlApi + 'api/user/preferences', // PATCH
+  addToFavorites: urlApi + 'api/user/preferences/stocks/favorite',
+  removeFromFavorites: urlApi + 'api/user/preferences/stocks/favorite/', // + symbol
+  getValidSymbols: urlApi + 'api/user/preferences/stocks/symbols',
+  
+  // 🆕 Nuevos endpoints con sectores y stocks completos (requieren token)
+  getSectors: urlApi + 'api/user/preferences/stocks/sectors',
+  getStocks: urlApi + 'api/user/preferences/stocks/complete',
+  
+  // 🆕 Favoritos - manejo de preferencias del usuario
+  getUserFavorites: urlApi + 'api/user/preferences', // GET - Ver favoritos (solo símbolos)
+  addStockToFavorites: urlApi + 'api/user/preferences/stocks/favorite', // POST - Agregar 1 favorito
+  addSectorToFavorites: urlApi + 'api/user/preferences/stocks/favorite/sector', // POST - Agregar sector completo
 };
 
 export default urlWebServices;

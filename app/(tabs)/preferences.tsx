@@ -1,9 +1,12 @@
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getDefaultSectors, getDefaultStockPreferences, getDefaultUserPreferences } from '@/services/mockup';
+import { addSectorToFavorites, addStockToFavorites, getSectors, getStocks, getUserFavorites } from '@/controller/apiController';
+import { getDefaultUserPreferences } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -30,24 +33,106 @@ interface SectorItem {
 export default function PreferencesScreen() {
   const router = useRouter();
   const { colorScheme } = useTheme();
+  const { isAuthenticated } = useAuth();
   const colors = Colors[colorScheme];
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'sectors' | 'stocks'>('sectors');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const userProfile = getDefaultUserPreferences();
 
-  const [sectors, setSectors] = useState(() => getDefaultSectors());
+  const [sectors, setSectors] = useState<SectorItem[]>([]);
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [userFavorites, setUserFavorites] = useState<string[]>([]);
 
-  const [stocks, setStocks] = useState(() => getDefaultStockPreferences());
-
-  const toggleSector = (sectorName: string) => {
-    setSectors(prev => prev.map(sector => 
-      sector.name === sectorName 
-        ? { ...sector, isSelected: !sector.isSelected }
-        : sector
-    ));
+  // Función para obtener el token almacenado
+  const getStoredToken = async (): Promise<string | null> => {
+    try {
+      const token = await AsyncStorage.getItem('@auth_token');
+      return token;
+    } catch (error) {
+      console.error('Error obteniendo token:', error);
+      return null;
+    }
   };
+
+  // Cargar datos desde el backend
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        console.log('🔍 Estado de autenticación:', isAuthenticated);
+
+        if (isAuthenticated) {
+          // Usuario autenticado: cargar desde backend
+          console.log('✅ Usuario autenticado, cargando desde backend...');
+          
+          // Obtener token almacenado
+          const token = await getStoredToken();
+          if (!token) {
+            throw new Error('Token no disponible');
+          }
+
+          const [sectorsResponse, stocksResponse, favoritesResponse] = await Promise.all([
+            getSectors(token),
+            getStocks(token),
+            getUserFavorites(token)
+          ]);
+
+          console.log('📊 Respuesta sectores:', sectorsResponse);
+          console.log('📈 Respuesta stocks:', stocksResponse);
+          console.log('⭐ Respuesta favoritos:', favoritesResponse);
+
+          // Extraer lista de símbolos favoritos - la estructura real es favorites.favoriteStocks
+          const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
+          setUserFavorites(userFavoritesSymbols);
+
+          console.log('🔍 Símbolos favoritos extraídos:', userFavoritesSymbols);
+
+          // Transformar los datos del backend al formato esperado por la UI
+          const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
+            name: sector.name,
+            isSelected: sector.isSelected || false,
+            count: sector.count || 0
+          }));
+
+          const stocksData = stocksResponse.stocks.map((stock: any) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            sector: stock.sector,
+            isSelected: userFavoritesSymbols.includes(stock.symbol) // Marcar como seleccionado si está en favoritos
+          }));
+
+          console.log('✅ Datos transformados - Sectores:', sectorsData.length);
+          console.log('✅ Datos transformados - Stocks:', stocksData.length);
+
+          setSectors(sectorsData);
+          setStocks(stocksData);
+        } else {
+          // Usuario no autenticado: mostrar mensaje de que necesita autenticarse
+          console.log('❌ Usuario no autenticado, se requiere autenticación para ver preferencias');
+          throw new Error('Se requiere autenticación para ver las preferencias');
+        }
+      } catch (error) {
+        console.error('❌ Error cargando datos:', error);
+        
+        // Mostrar error al usuario
+        setError('Error al cargar los datos del servidor. Por favor, verifica tu conexión e intenta nuevamente.');
+        
+        // Mantener arrays vacíos en caso de error
+        setSectors([]);
+        setStocks([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [isAuthenticated]); // Recargar cuando cambie el estado de autenticación
 
   const toggleStock = (stockSymbol: string) => {
     setStocks(prev => prev.map(stock => 
@@ -57,11 +142,20 @@ export default function PreferencesScreen() {
     ));
   };
 
-  const handleAddToPreferences = (item: SectorItem | StockItem, type: 'sector' | 'stock') => {
+  const handleAddToPreferences = async (item: SectorItem | StockItem, type: 'sector' | 'stock') => {
     const isAlreadySelected = item.isSelected;
     const action = isAlreadySelected ? 'quitar de' : 'agregar a';
     const actionText = isAlreadySelected ? 'Quitar' : 'Agregar';
     const itemName = type === 'sector' ? item.name : `${(item as StockItem).name} (${(item as StockItem).symbol})`;
+    
+    // Por ahora solo implementamos agregar (no quitar)
+    if (isAlreadySelected) {
+      Alert.alert(
+        'Función no disponible',
+        'La funcionalidad para quitar favoritos se implementará pronto.'
+      );
+      return;
+    }
     
     Alert.alert(
       `${actionText} Preferencias`,
@@ -70,16 +164,61 @@ export default function PreferencesScreen() {
         { text: 'Cancelar', style: 'cancel' },
         { 
           text: actionText, 
-          onPress: () => {
-            if (type === 'sector') {
-              toggleSector(item.name);
-            } else {
-              toggleStock((item as StockItem).symbol);
+          onPress: async () => {
+            try {
+              // Obtener token
+              const token = await getStoredToken();
+              if (!token) {
+                Alert.alert('Error', 'Token no disponible. Por favor, inicia sesión nuevamente.');
+                return;
+              }
+
+              if (type === 'sector') {
+                // Agregar sector completo
+                const result = await addSectorToFavorites(item.name, token);
+                
+                if (result.success) {
+                  // Actualizar favoritos locales
+                  setUserFavorites(result.favorites);
+                  
+                  // Actualizar estado de los stocks para reflejar los nuevos favoritos
+                  setStocks(prev => prev.map(stock => ({
+                    ...stock,
+                    isSelected: result.favorites.includes(stock.symbol)
+                  })));
+                  
+                  Alert.alert(
+                    'Éxito',
+                    `Sector ${item.name} agregado a tus favoritos. Se agregaron ${result.addedSymbols?.length || 0} acciones.`
+                  );
+                }
+              } else {
+                // Agregar acción específica
+                const stock = item as StockItem;
+                const result = await addStockToFavorites(stock.symbol, token);
+                
+                if (result.success) {
+                  // Actualizar favoritos locales
+                  setUserFavorites(result.favorites);
+                  
+                  // Actualizar estado local
+                  toggleStock(stock.symbol);
+                  
+                  Alert.alert(
+                    'Éxito',
+                    `${stock.name} (${stock.symbol}) agregado a tus favoritos`
+                  );
+                } else if (result.alreadyExists) {
+                  Alert.alert('Información', result.message);
+                }
+              }
+            } catch (error) {
+              console.error('Error agregando a favoritos:', error);
+              Alert.alert(
+                'Error',
+                'Hubo un problema al agregar a favoritos. Por favor, intenta nuevamente.'
+              );
             }
-            Alert.alert(
-              'Éxito', 
-              `${itemName} ${isAlreadySelected ? 'eliminado de' : 'agregado a'} tus preferencias`
-            );
           }
         }
       ]
@@ -321,15 +460,97 @@ export default function PreferencesScreen() {
 
       {/* Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {getFilteredItems().map(item => renderItem(item))}
-        
-        {getFilteredItems().length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="search" size={48} color={colors.subtitle} />
-            <Text style={[styles.emptyStateText, { color: colors.subtitle }]}>
-              No se encontraron {activeTab === 'sectors' ? 'sectores' : 'acciones'} que coincidan con tu búsqueda
+        {loading ? (
+          <View style={styles.loadingState}>
+            <Ionicons name="hourglass-outline" size={48} color={colors.subtitle} />
+            <Text style={[styles.loadingText, { color: colors.subtitle }]}>
+              Cargando datos...
             </Text>
           </View>
+        ) : error ? (
+          <View style={styles.errorState}>
+            <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+            <Text style={[styles.errorText, { color: "#ef4444" }]}>
+              {error}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: colors.tint }]}
+              onPress={() => {
+                setError(null);
+                // Recargar datos
+                const loadData = async () => {
+                  try {
+                    setLoading(true);
+                    
+                    if (isAuthenticated) {
+                      // Usuario autenticado: cargar desde backend
+                      const token = await getStoredToken();
+                      if (!token) {
+                        throw new Error('Token no disponible');
+                      }
+
+                      const [sectorsResponse, stocksResponse, favoritesResponse] = await Promise.all([
+                        getSectors(token),
+                        getStocks(token),
+                        getUserFavorites(token)
+                      ]);
+
+                      // Extraer lista de símbolos favoritos - la estructura real es favorites.favoriteStocks
+                      const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
+                      setUserFavorites(userFavoritesSymbols);
+
+                      const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
+                        name: sector.name,
+                        isSelected: sector.isSelected || false,
+                        count: sector.count || 0
+                      }));
+
+                      const stocksData = stocksResponse.stocks.map((stock: any) => ({
+                        symbol: stock.symbol,
+                        name: stock.name,
+                        sector: stock.sector,
+                        isSelected: userFavoritesSymbols.includes(stock.symbol) // Marcar como seleccionado si está en favoritos
+                      }));
+
+                      setSectors(sectorsData);
+                      setStocks(stocksData);
+                    } else {
+                      // Usuario no autenticado: mostrar mensaje de que necesita autenticarse
+                      throw new Error('Se requiere autenticación para ver las preferencias');
+                    }
+                  } catch (error) {
+                    console.error('Error cargando datos:', error);
+                    
+                    // Mostrar error al usuario
+                    setError('Error al cargar los datos del servidor. Por favor, verifica tu conexión e intenta nuevamente.');
+                    
+                    // Mantener arrays vacíos en caso de error
+                    setSectors([]);
+                    setStocks([]);
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                loadData();
+              }}
+            >
+              <Ionicons name="refresh-outline" size={16} color="#ffffff" />
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {getFilteredItems().map(item => renderItem(item))}
+            
+            {getFilteredItems().length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="search" size={48} color={colors.subtitle} />
+                <Text style={[styles.emptyStateText, { color: colors.subtitle }]}>
+                  No se encontraron {activeTab === 'sectors' ? 'sectores' : 'acciones'} que coincidan con tu búsqueda
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -558,5 +779,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     lineHeight: 20,
+  },
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: 64,
+  },
+  loadingText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 20,
+  },
+  errorState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  errorText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
