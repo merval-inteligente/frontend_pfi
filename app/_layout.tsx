@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { CustomSplashScreen } from '@/components/CustomSplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { PreferencesSyncProvider } from '@/contexts/PreferencesSyncContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 
 function RootLayoutContent() {
@@ -56,7 +57,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootLayoutContent />
+        <PreferencesSyncProvider>
+          <RootLayoutContent />
+        </PreferencesSyncProvider>
       </AuthProvider>
     </ThemeProvider>
   );

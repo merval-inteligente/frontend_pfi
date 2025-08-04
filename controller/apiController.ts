@@ -1,5 +1,33 @@
 import urlWebServices from './webservices';
 
+// Interfaces para tipos
+interface RemoveFavoriteStockResponse {
+  status: number;
+  message: string;
+  data: {
+    preferences: {
+      favoriteStocks: string[];
+    };
+    removedSymbol: string;
+  };
+}
+
+interface RemoveFavoriteSectorResponse {
+  status: number;
+  message: string;
+  data: {
+    preferences: {
+      favoriteStocks: string[];
+      notifications: boolean;
+      theme: string;
+    };
+    sector: string;
+    removedSymbols: string[];
+    totalRemoved: number;
+    notFoundInFavorites: number;
+  };
+}
+
 // 🔐 ENDPOINTS DE AUTENTICACIÓN
 
 export const signUp = async userData => {
@@ -431,8 +459,15 @@ export const getSectors = async (token: string) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Error obteniendo sectores');
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
+        console.warn('No se pudo parsear respuesta de error como JSON');
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -465,8 +500,15 @@ export const getStocks = async (token: string) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Error obteniendo acciones');
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
+        console.warn('No se pudo parsear respuesta de error como JSON');
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -499,8 +541,15 @@ export const getUserFavorites = async (token: string) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Error obteniendo favoritos');
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
+        console.warn('No se pudo parsear respuesta de error como JSON');
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -717,4 +766,59 @@ export class PreferencesAPI {
     return this.makeAuthenticatedRequest(getStocks);
   }
 }
+
+// 🗑️ ENDPOINTS DE ELIMINACIÓN DE FAVORITOS
+
+export const removeFavoriteStock = async (token: string, symbol: string): Promise<RemoveFavoriteStockResponse> => {
+  const url = `${urlWebServices.removeFavoriteStock}/${symbol}`;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Error al eliminar stock de favoritos');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Error eliminando stock de favoritos:', error);
+    throw error;
+  }
+};
+
+export const removeFavoriteSector = async (token: string, sector: string): Promise<RemoveFavoriteSectorResponse> => {
+  const url = urlWebServices.removeFavoriteSector;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ sector }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Error al eliminar sector de favoritos');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Error eliminando sector de favoritos:', error);
+    throw error;
+  }
+};
 

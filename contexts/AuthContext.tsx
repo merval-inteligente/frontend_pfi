@@ -1,7 +1,7 @@
 import { getProfile, signIn, signUp } from '@/controller/apiController';
 import { User } from '@/services/mockData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 interface AuthContextType {
   user: User | null;
@@ -36,12 +36,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user session on app start
-  useEffect(() => {
-    loadUserSession();
-  }, []);
-
-  const loadUserSession = async () => {
+  const loadUserSession = useCallback(async () => {
     try {
       const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
       const storedToken = await AsyncStorage.getItem('@auth_token');
@@ -76,11 +71,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Token inválido - limpiar datos
             throw new Error('Token inválido');
           }
-        } catch {
-          console.log('Token inválido o expirado, limpiando sesión');
-          await AsyncStorage.removeItem(USER_STORAGE_KEY);
-          await AsyncStorage.removeItem('@auth_token');
-          setUser(null);
+        } catch (error: any) {
+          // Solo hacer logout automático si es un error específico de autenticación
+          // Los errores de JSON parse y servidor no deben causar logout
+          const errorMessage = error?.message || '';
+          const isRealAuthError = errorMessage.includes('401') || 
+                                errorMessage.includes('403') || 
+                                errorMessage.includes('Unauthorized') ||
+                                (errorMessage.includes('Token inválido') && !errorMessage.includes('JSON'));
+          
+          if (isRealAuthError) {
+            console.log('Token inválido o expirado, limpiando sesión');
+            await AsyncStorage.removeItem(USER_STORAGE_KEY);
+            await AsyncStorage.removeItem('@auth_token');
+            setUser(null);
+          } else {
+            console.warn('Error del servidor al verificar sesión, manteniendo usuario logueado. Error:', errorMessage);
+            // Mantener el usuario logueado - solo marcar como no loading
+            // Si hay un usuario guardado localmente, mantenerlo
+            if (storedUser) {
+              const localUser = JSON.parse(storedUser);
+              setUser(localUser);
+            }
+          }
         }
       }
     } catch (error) {
@@ -88,7 +101,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Load user session on app start
+  useEffect(() => {
+    loadUserSession();
+  }, [loadUserSession]);
 
   const saveUserSession = async (userData: User) => {
     try {

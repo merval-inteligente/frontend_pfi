@@ -1,13 +1,14 @@
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getStocks, getUserFavorites } from '@/controller/apiController';
+import { getStocks } from '@/controller/apiController';
 import { MarketData, MarketService, NewsItem as MockNewsItem, NewsService, Stock, StockService } from '@/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const StockItem = ({ stock }: { stock: Stock }) => {
@@ -131,6 +132,7 @@ const NewsCard = ({ news }: { news: MockNewsItem }) => {
 export default function HomeScreen() {
   const { colorScheme } = useTheme();
   const { user, isAuthenticated } = useAuth();
+  const { userFavorites, refreshFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
   
   const [userStocks, setUserStocks] = useState<Stock[]>([]);
@@ -151,63 +153,51 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [user, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Load user's favorite stocks from backend if authenticated
-      if (isAuthenticated) {
+      // Load user's favorite stocks
+      if (isAuthenticated && userFavorites.length > 0) {
         try {
-          // Obtener token almacenado
           const token = await getStoredToken();
           if (token) {
-            // Obtener favoritos del usuario
-            const favoritesResponse = await getUserFavorites(token);
-            const userFavoriteSymbols = favoritesResponse.favorites?.favoriteStocks || [];
+            // Obtener todos los stocks desde el backend
+            const stocksResponse = await getStocks(token);
             
-            if (userFavoriteSymbols.length > 0) {
-              // Obtener todos los stocks desde el backend
-              const stocksResponse = await getStocks(token);
-              
-              // Filtrar solo los stocks que están en favoritos
-              const favoriteStocks = stocksResponse.stocks
-                .filter((stock: any) => userFavoriteSymbols.includes(stock.symbol))
-                .map((stock: any) => ({
-                  id: stock.symbol,
-                  symbol: stock.symbol,
-                  name: stock.name,
-                  sector: stock.sector,
-                  currentPrice: Math.floor(Math.random() * 1000) + 100, // Precio simulado por ahora
-                  percentageChange: (Math.random() - 0.5) * 10, // Cambio porcentual simulado
-                }));
-              
-              setUserStocks(favoriteStocks);
-            } else {
-              setUserStocks([]);
-            }
+            // Filtrar solo los stocks que están en favoritos
+            const favoriteStocks = stocksResponse.stocks
+              .filter((stock: any) => userFavorites.includes(stock.symbol))
+              .map((stock: any) => ({
+                id: stock.symbol,
+                symbol: stock.symbol,
+                name: stock.name,
+                sector: stock.sector,
+                currentPrice: Math.floor(Math.random() * 1000) + 100,
+                percentageChange: (Math.random() - 0.5) * 10,
+              }));
+            
+            setUserStocks(favoriteStocks);
           } else {
-            // Fallback a datos mock si no hay token
-            if (user?.preferences.favoriteStocks) {
-              const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
-              setUserStocks(stocks);
-            }
+            throw new Error('No token available');
           }
-        } catch {
-          // Fallback a datos mock en caso de error
+        } catch (error) {
+          console.error('Error loading backend stocks:', error);
+          // Fallback a datos mock
           if (user?.preferences.favoriteStocks) {
             const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
             setUserStocks(stocks);
+          } else {
+            setUserStocks([]);
           }
         }
       } else {
-        // Usuario no autenticado, usar datos mock
+        // Usuario no autenticado o sin favoritos, usar datos mock
         if (user?.preferences.favoriteStocks) {
           const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
           setUserStocks(stocks);
+        } else {
+          setUserStocks([]);
         }
       }
       
@@ -224,7 +214,74 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, user, userFavorites]);
+
+  // Cargar datos inicial cuando el usuario esté autenticado  
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      console.log('🔄 Cargando datos iniciales para usuario autenticado');
+      loadData();
+    } else if (!isAuthenticated) {
+      // Limpiar datos cuando no esté autenticado
+      console.log('🧹 Limpiando datos - usuario no autenticado');
+      setUserStocks([]);
+      setNews([]);
+    }
+  }, [user, isAuthenticated, loadData]);
+
+  // Recargar stocks cuando cambien los favoritos
+  useEffect(() => {
+    if (isAuthenticated && userFavorites && userFavorites.length > 0) {
+      const reloadStockData = async () => {
+        try {
+          console.log('🔄 Recargando stocks para favoritos:', userFavorites);
+          
+          // Intentar cargar desde backend primero
+          const token = await getStoredToken();
+          if (token) {
+            try {
+              const stocksResponse = await getStocks(token);
+              const favoriteStocks = stocksResponse.stocks
+                .filter((stock: any) => userFavorites.includes(stock.symbol))
+                .map((stock: any) => ({
+                  id: stock.symbol,
+                  symbol: stock.symbol,
+                  name: stock.name,
+                  sector: stock.sector,
+                  currentPrice: Math.floor(Math.random() * 1000) + 100,
+                  percentageChange: (Math.random() - 0.5) * 10,
+                }));
+              
+              setUserStocks(favoriteStocks);
+              return;
+            } catch (error) {
+              console.error('Error loading stocks from backend:', error);
+            }
+          }
+          
+          // Fallback a datos mock
+          const stocks = await StockService.getUserStocks(userFavorites);
+          setUserStocks(stocks);
+        } catch (error) {
+          console.error('Error loading user stocks:', error);
+        }
+      };
+      reloadStockData();
+    } else if (userFavorites && userFavorites.length === 0) {
+      console.log('📭 No hay favoritos, limpiando stocks');
+      setUserStocks([]);
+    }
+  }, [userFavorites, isAuthenticated]);
+
+  // Refrescar favoritos cuando la pantalla recibe foco
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🎯 Pantalla enfocada - refrescando favoritos');
+      refreshFavorites().catch(error => {
+        console.error('Error refreshing favorites on focus:', error);
+      });
+    }, [refreshFavorites])
+  );
   
   const displayedStocks = showAllStocks ? userStocks : userStocks.slice(0, 3);
   const displayedNews = showAllNews ? news : news.slice(0, 2);

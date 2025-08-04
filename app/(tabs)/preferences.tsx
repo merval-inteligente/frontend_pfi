@@ -1,21 +1,22 @@
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { addSectorToFavorites, addStockToFavorites, getSectors, getStocks, getUserFavorites } from '@/controller/apiController';
+import { addSectorToFavorites, addStockToFavorites, getSectors, getStocks, getUserFavorites, removeFavoriteSector, removeFavoriteStock } from '@/controller/apiController';
 import { getDefaultUserPreferences } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface StockItem {
@@ -34,6 +35,7 @@ export default function PreferencesScreen() {
   const router = useRouter();
   const { colorScheme } = useTheme();
   const { isAuthenticated } = useAuth();
+  const { userFavorites, updateFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,7 +47,6 @@ export default function PreferencesScreen() {
 
   const [sectors, setSectors] = useState<SectorItem[]>([]);
   const [stocks, setStocks] = useState<StockItem[]>([]);
-  const [userFavorites, setUserFavorites] = useState<string[]>([]);
 
   // Función para obtener el token almacenado
   const getStoredToken = async (): Promise<string | null> => {
@@ -89,7 +90,7 @@ export default function PreferencesScreen() {
 
           // Extraer lista de símbolos favoritos - la estructura real es favorites.favoriteStocks
           const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
-          setUserFavorites(userFavoritesSymbols);
+          updateFavorites(userFavoritesSymbols);
 
           console.log('🔍 Símbolos favoritos extraídos:', userFavoritesSymbols);
 
@@ -104,7 +105,7 @@ export default function PreferencesScreen() {
             symbol: stock.symbol,
             name: stock.name,
             sector: stock.sector,
-            isSelected: userFavoritesSymbols.includes(stock.symbol) // Marcar como seleccionado si está en favoritos
+            isSelected: userFavoritesSymbols.includes(stock.symbol) // Usar datos frescos de la API
           }));
 
           console.log('✅ Datos transformados - Sectores:', sectorsData.length);
@@ -132,7 +133,7 @@ export default function PreferencesScreen() {
     };
 
     loadData();
-  }, [isAuthenticated]); // Recargar cuando cambie el estado de autenticación
+  }, [isAuthenticated]); // Solo incluir dependencias realmente necesarias
 
   const toggleStock = (stockSymbol: string) => {
     setStocks(prev => prev.map(stock => 
@@ -142,18 +143,110 @@ export default function PreferencesScreen() {
     ));
   };
 
+  const handleRemoveStock = async (stock: StockItem) => {
+    Alert.alert(
+      'Eliminar de Favoritos',
+      `¿Deseas eliminar ${stock.name} (${stock.symbol}) de tus favoritos?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await getStoredToken();
+              if (!token) {
+                Alert.alert('Error', 'Token no disponible. Por favor, inicia sesión nuevamente.');
+                return;
+              }
+
+              const result = await removeFavoriteStock(token, stock.symbol);
+              
+              if (result.status === 200) {
+                // Actualizar favoritos locales
+                updateFavorites(result.data.preferences.favoriteStocks);
+                
+                // Actualizar estado local
+                toggleStock(stock.symbol);
+                
+                Alert.alert(
+                  'Éxito',
+                  `${stock.name} (${stock.symbol}) eliminado de tus favoritos`
+                );
+              }
+            } catch (error) {
+              console.error('Error eliminando stock de favoritos:', error);
+              Alert.alert(
+                'Error',
+                'Hubo un problema al eliminar de favoritos. Por favor, intenta nuevamente.'
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRemoveSector = async (sector: SectorItem) => {
+    Alert.alert(
+      'Eliminar Sector de Favoritos',
+      `¿Deseas eliminar todas las acciones del sector ${sector.name} de tus favoritos?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await getStoredToken();
+              if (!token) {
+                Alert.alert('Error', 'Token no disponible. Por favor, inicia sesión nuevamente.');
+                return;
+              }
+
+              const result = await removeFavoriteSector(token, sector.name);
+              
+              if (result.status === 200) {
+                // Actualizar favoritos locales
+                updateFavorites(result.data.preferences.favoriteStocks);
+                
+                // Actualizar estado de los stocks para reflejar los favoritos eliminados
+                setStocks(prev => prev.map(stock => ({
+                  ...stock,
+                  isSelected: result.data.preferences.favoriteStocks.includes(stock.symbol)
+                })));
+                
+                Alert.alert(
+                  'Éxito',
+                  `Sector ${sector.name} eliminado de tus favoritos. Se eliminaron ${result.data.removedSymbols?.length || 0} acciones.`
+                );
+              }
+            } catch (error) {
+              console.error('Error eliminando sector de favoritos:', error);
+              Alert.alert(
+                'Error',
+                'Hubo un problema al eliminar el sector de favoritos. Por favor, intenta nuevamente.'
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleAddToPreferences = async (item: SectorItem | StockItem, type: 'sector' | 'stock') => {
     const isAlreadySelected = item.isSelected;
     const action = isAlreadySelected ? 'quitar de' : 'agregar a';
     const actionText = isAlreadySelected ? 'Quitar' : 'Agregar';
     const itemName = type === 'sector' ? item.name : `${(item as StockItem).name} (${(item as StockItem).symbol})`;
     
-    // Por ahora solo implementamos agregar (no quitar)
+    // Ahora redirigimos a las funciones específicas de eliminación
     if (isAlreadySelected) {
-      Alert.alert(
-        'Función no disponible',
-        'La funcionalidad para quitar favoritos se implementará pronto.'
-      );
+      if (type === 'sector') {
+        handleRemoveSector(item as SectorItem);
+      } else {
+        handleRemoveStock(item as StockItem);
+      }
       return;
     }
     
@@ -179,7 +272,7 @@ export default function PreferencesScreen() {
                 
                 if (result.success) {
                   // Actualizar favoritos locales
-                  setUserFavorites(result.favorites);
+                  updateFavorites(result.favorites);
                   
                   // Actualizar estado de los stocks para reflejar los nuevos favoritos
                   setStocks(prev => prev.map(stock => ({
@@ -199,7 +292,7 @@ export default function PreferencesScreen() {
                 
                 if (result.success) {
                   // Actualizar favoritos locales
-                  setUserFavorites(result.favorites);
+                  updateFavorites(result.favorites);
                   
                   // Actualizar estado local
                   toggleStock(stock.symbol);
@@ -497,7 +590,7 @@ export default function PreferencesScreen() {
 
                       // Extraer lista de símbolos favoritos - la estructura real es favorites.favoriteStocks
                       const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
-                      setUserFavorites(userFavoritesSymbols);
+                      updateFavorites(userFavoritesSymbols);
 
                       const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
                         name: sector.name,
@@ -509,7 +602,7 @@ export default function PreferencesScreen() {
                         symbol: stock.symbol,
                         name: stock.name,
                         sector: stock.sector,
-                        isSelected: userFavoritesSymbols.includes(stock.symbol) // Marcar como seleccionado si está en favoritos
+                        isSelected: userFavorites.includes(stock.symbol) // Usar userFavorites del contexto
                       }));
 
                       setSectors(sectorsData);

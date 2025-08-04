@@ -27,6 +27,10 @@ const urlWebServices = {
   getUserFavorites: urlApi + 'api/user/preferences', // GET - Ver favoritos (solo símbolos)
   addStockToFavorites: urlApi + 'api/user/preferences/stocks/favorite', // POST - Agregar 1 favorito
   addSectorToFavorites: urlApi + 'api/user/preferences/stocks/favorite/sector', // POST - Agregar sector completo
+  
+  // 🗑️ Eliminar favoritos
+  removeFavoriteStock: urlApi + 'api/user/preferences/stocks/favorite', // DELETE /:symbol
+  removeFavoriteSector: urlApi + 'api/user/preferences/stocks/favorite/sector', // DELETE + body {sector}
 };
 
 export default urlWebServices;
