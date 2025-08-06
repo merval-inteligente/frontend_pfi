@@ -1,20 +1,27 @@
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ChatMessage, generateBotResponse } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import chatService from '../../services/ChatService';
+
+interface ChatMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+}
 
 export default function ChatScreen() {
   const { colorScheme } = useTheme();
@@ -24,86 +31,147 @@ export default function ChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        text: message.trim(),
-        sender: 'user',
-        timestamp: new Date()
-      };
+  useEffect(() => {
+    initializeChatService();
+  }, []);
 
-      // Agregar mensaje del usuario
-      setMessages(prev => [...prev, userMessage]);
-      setMessage('');
-      setIsTyping(true);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-      // Simular delay de respuesta del bot
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollToEnd({ animated: true });
+      }
+    }, 100);
+  };
+
+  const initializeChatService = async () => {
+    try {
+      let userToken = await AsyncStorage.getItem('userToken');
+      let userId = await AsyncStorage.getItem('userId');
+
+      if (!userToken) {
+        userToken = 'demo_token_123';
+        userId = 'demo_user';
+        await AsyncStorage.setItem('userToken', userToken);
+        await AsyncStorage.setItem('userId', userId);
+      }
+
+      await chatService.initialize(userToken);
+      await chatService.authenticate(userId!);
+      console.log('✅ Chat inicializado');
+    } catch (error) {
+      console.log('⚠️ Usando modo offline');
+    }
+  };
+
+  const generateFallbackResponse = (userMessage: string): string => {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    const responses = [
+      'Como analista financiero, puedo decirte que el mercado argentino ofrece oportunidades interesantes en este momento.',
+      'Basándome en las condiciones actuales, recomiendo diversificar entre sectores defensivos y de crecimiento.',
+      'El MERVAL ha mostrado buen momentum últimamente. ¿Te interesa algún sector en particular?',
+      'Para tu perfil de inversor, sugiero evaluar las líderes del panel: GGAL, YPF y ALUA.',
+      'El contexto macro actual favorece acciones con dividendo y fundamentals sólidos.',
+      'Considera rebalancear tu portfolio según las condiciones del mercado actual.'
+    ];
+    
+    if (lowerMessage.includes('precio') || lowerMessage.includes('cotiza')) {
+      return 'GGAL cotiza en $850, YPF en $920 y ALUA en $445. Todas muestran buen potencial según mi análisis.';
+    }
+    
+    if (lowerMessage.includes('merval') || lowerMessage.includes('índice')) {
+      return 'El MERVAL cerró en 2,180,450 puntos (+1.2%). Sesión positiva liderada por bancos y energía.';
+    }
+    
+    if (lowerMessage.includes('recomend') || lowerMessage.includes('invertir')) {
+      return 'Para tu perfil, sugiero: 40% bancos (GGAL, SUPV), 30% energía (YPF), 30% industriales (ALUA, PAM).';
+    }
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+
+  const handleSendMessage = async () => {
+    if (!message.trim()) return;
+
+    const messageText = message.trim();
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      text: messageText,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setMessage('');
+    setIsTyping(true);
+
+    try {
+      const response = await chatService.sendMessage(messageText);
+      
+      let botResponseText;
+      if (response.success) {
+        botResponseText = response.assistantResponse;
+      } else {
+        botResponseText = generateFallbackResponse(messageText);
+      }
+
       setTimeout(() => {
-        const botResponse = generateBotResponse(message.trim());
         const botMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
-          text: botResponse,
+          text: botResponseText,
           sender: 'bot',
           timestamp: new Date()
         };
 
         setMessages(prev => [...prev, botMessage]);
         setIsTyping(false);
-      }, 1000 + Math.random() * 2000); // Entre 1-3 segundos
+      }, 800);
+
+    } catch (error) {
+      setTimeout(() => {
+        const botMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          text: generateFallbackResponse(messageText),
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, botMessage]);
+        setIsTyping(false);
+      }, 800);
     }
   };
-
-  const handleQuickMessage = (quickMessage: string) => {
-    setMessage(quickMessage);
-  };
-
-  useEffect(() => {
-    // Auto scroll al último mensaje
-    if (scrollViewRef.current) {
-      scrollViewRef.current.scrollToEnd({ animated: true });
-    }
-  }, [messages]);
-
-  // Usar colores específicos del diseño cuando esté en modo oscuro
-  const isDark = colorScheme === 'dark';
-  const bgColor = isDark ? '#131712' : colors.background;
-  const cardColor = isDark ? '#2d372a' : colors.card;
-  const subtitleColor = isDark ? '#a5b6a0' : colors.subtitle;
-  const textColor = isDark ? 'white' : colors.text;
 
   const renderMessage = (msg: ChatMessage, index: number) => {
-    const isBot = msg.sender === 'bot';
+    const isUser = msg.sender === 'user';
+    
     return (
       <View key={msg.id} style={[
-        styles.messageWrapper,
-        isBot ? styles.botMessageWrapper : styles.userMessageWrapper
+        styles.messageContainer,
+        isUser ? styles.userMessageContainer : styles.botMessageContainer
       ]}>
-        {isBot && (
-          <Image 
-            source={{
-              uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCxKzZcEK_9oBXUVXgVKhwMuT_KoaWFt7W_k3ZiuRuAPZubSrrpzn0g2uCIDjnhFAFslH3V_yunI9eu2ygHt39StbylD2t8M3C777lSbuVGP02t6YvmK-4WSBXupeuOUXCMxEOuYPveL44YH6npskobsn_5h-BwTRwTGAhIvOuJqKH-fAyt88gIV79AUAVuG82LrkZj-iYUEFMGN0RTUrDc268wiEyJDIiNAQcOH_eI4l2RPe98dhUf6_7nEmCDKEinkipLowTB-E8"
-            }}
-            style={styles.messageAvatar}
-          />
-        )}
         <View style={[
           styles.messageBubble,
-          {
-            backgroundColor: isBot ? cardColor : '#4CAF50',
-            marginLeft: isBot ? 8 : 50,
-            marginRight: isBot ? 50 : 8,
+          isUser ? styles.userBubble : styles.botBubble,
+          { 
+            backgroundColor: isUser ? '#007AFF' : (colorScheme === 'dark' ? '#2d372a' : colors.card),
+            borderColor: colorScheme === 'dark' ? '#444' : '#e0e0e0'
           }
         ]}>
           <Text style={[
             styles.messageText,
-            { color: isBot ? textColor : 'white' }
+            { color: isUser ? 'white' : colors.text }
           ]}>
             {msg.text}
           </Text>
+          
           <Text style={[
-            styles.messageTime,
-            { color: isBot ? subtitleColor : 'rgba(255,255,255,0.7)' }
+            styles.timestamp,
+            { color: isUser ? 'rgba(255,255,255,0.7)' : colors.subtitle }
           ]}>
             {msg.timestamp.toLocaleTimeString('es-AR', { 
               hour: '2-digit', 
@@ -116,123 +184,110 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bgColor }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.cardBorder }]}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarEmoji}>🤖</Text>
+            </View>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>
+                Chat Financiero IA
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: colors.subtitle }]}>
+                Asistente MERVAL • En línea
+              </Text>
+            </View>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={[styles.headerButton, { backgroundColor: colors.background }]}>
+              <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
       <KeyboardAvoidingView 
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: bgColor }]}>
-          <Text style={[styles.headerTitle, { color: textColor }]}>Guía MERVAL</Text>
-        </View>
-
-        {/* Chat Content */}
-        <ScrollView 
+        <ScrollView
           ref={scrollViewRef}
-          style={styles.scrollContainer} 
-          contentContainerStyle={styles.scrollContent}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Bot Avatar and Initial Message */}
-          <View style={styles.botMessageContainer}>
-            <Image 
-              source={{
-                uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCxKzZcEK_9oBXUVXgVKhwMuT_KoaWFt7W_k3ZiuRuAPZubSrrpzn0g2uCIDjnhFAFslH3V_yunI9eu2ygHt39StbylD2t8M3C777lSbuVGP02t6YvmK-4WSBXupeuOUXCMxEOuYPveL44YH6npskobsn_5h-BwTRwTGAhIvOuJqKH-fAyt88gIV79AUAVuG82LrkZj-iYUEFMGN0RTUrDc268wiEyJDIiNAQcOH_eI4l2RPe98dhUf6_7nEmCDKEinkipLowTB-E8"
-              }}
-              style={styles.botAvatar}
-            />
-            <View style={styles.messageContainer}>
-              <Text style={[styles.botName, { color: subtitleColor }]}>Guía MERVAL</Text>
-              <View style={[styles.messageBubble, { backgroundColor: cardColor }]}>
-                <Text style={[styles.messageText, { color: textColor }]}>
-                  ¡Hola, soy tu asistente financiero! Estoy aquí para ayudarte a entender el mercado de valores argentino. ¿Qué te gustaría saber hoy?
-                </Text>
-              </View>
+          {messages.length === 0 && (
+            <View style={styles.welcomeContainer}>
+              <Text style={[styles.welcomeText, { color: colors.text }]}>
+                ¡Hola! 👋
+              </Text>
+              <Text style={[styles.welcomeSubtext, { color: colors.subtitle }]}>
+                Soy tu asistente financiero especializado en el mercado argentino. 
+                Puedo ayudarte con análisis de acciones, recomendaciones de inversión y consultas sobre el MERVAL.
+              </Text>
             </View>
-          </View>
-
-          {/* Messages */}
+          )}
+          
           {messages.map((msg, index) => renderMessage(msg, index))}
-
-          {/* Typing Indicator */}
+          
           {isTyping && (
-            <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
-              <Image 
-                source={{
-                  uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCxKzZcEK_9oBXUVXgVKhwMuT_KoaWFt7W_k3ZiuRuAPZubSrrpzn0g2uCIDjnhFAFslH3V_yunI9eu2ygHt39StbylD2t8M3C777lSbuVGP02t6YvmK-4WSBXupeuOUXCMxEOuYPveL44YH6npskobsn_5h-BwTRwTGAhIvOuJqKH-fAyt88gIV79AUAVuG82LrkZj-iYUEFMGN0RTUrDc268wiEyJDIiNAQcOH_eI4l2RPe98dhUf6_7nEmCDKEinkipLowTB-E8"
-                }}
-                style={styles.messageAvatar}
-              />
-              <View style={[styles.messageBubble, { backgroundColor: cardColor, marginLeft: 8, marginRight: 50 }]}>
-                <Text style={[styles.messageText, { color: textColor }]}>
+            <View style={[styles.messageContainer, styles.botMessageContainer]}>
+              <View style={[
+                styles.messageBubble,
+                styles.botBubble,
+                { 
+                  backgroundColor: colorScheme === 'dark' ? '#2d372a' : colors.card,
+                  borderColor: colorScheme === 'dark' ? '#444' : '#e0e0e0'
+                }
+              ]}>
+                <Text style={[styles.typingText, { color: colors.subtitle }]}>
                   Escribiendo...
                 </Text>
               </View>
             </View>
           )}
-
-          {/* Quick Action Chips - Solo mostrar si no hay mensajes */}
-          {messages.length === 0 && (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipsContainer}
-              contentContainerStyle={styles.chipsContent}
-            >
-              <TouchableOpacity 
-                style={[styles.chip, { backgroundColor: cardColor }]}
-                onPress={() => handleQuickMessage('¿Qué es el MERVAL?')}
-              >
-                <Text style={[styles.chipText, { color: textColor }]}>¿Qué es el MERVAL?</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.chip, { backgroundColor: cardColor }]}
-                onPress={() => handleQuickMessage('¿Cómo invertir en acciones?')}
-              >
-                <Text style={[styles.chipText, { color: textColor }]}>¿Cómo invertir en acciones?</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.chip, { backgroundColor: cardColor }]}
-                onPress={() => handleQuickMessage('¿Cuáles son las acciones más populares?')}
-              >
-                <Text style={[styles.chipText, { color: textColor }]}>¿Cuáles son las acciones más populares?</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
         </ScrollView>
 
-        {/* Input Area - Adaptable al teclado */}
-        <View style={[styles.inputSection, { backgroundColor: bgColor }]}>
-          <View style={styles.inputContainer}>
-            <View style={[styles.inputWrapper, { backgroundColor: cardColor }]}>
-              <TextInput
-                style={[styles.textInput, { color: textColor }]}
-                placeholder="Escribe un mensaje..."
-                placeholderTextColor={subtitleColor}
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                maxLength={500}
-              />
-              {message.trim() ? (
-                <TouchableOpacity 
-                  style={[styles.sendButton, { backgroundColor: '#4CAF50' }]}
-                  onPress={handleSendMessage}
-                >
-                  <Ionicons name="send" size={18} color="white" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={styles.attachButton}>
-                  <Ionicons name="image-outline" size={20} color={subtitleColor} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.cardBorder }]}>
+          <TextInput
+            style={[
+              styles.textInput,
+              { 
+                backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+                color: colors.text,
+                borderColor: colors.cardBorder
+              }
+            ]}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Escribe tu consulta financiera..."
+            placeholderTextColor={colors.subtitle}
+            multiline
+            maxLength={500}
+            onSubmitEditing={handleSendMessage}
+            blurOnSubmit={false}
+          />
           
-          <Text style={[styles.disclaimer, { color: subtitleColor }]}>
-            La información proporcionada es solo para fines educativos y no constituye asesoramiento financiero.
-          </Text>
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              { 
+                backgroundColor: message.trim() ? '#007AFF' : colors.cardBorder,
+                opacity: message.trim() ? 1 : 0.5
+              }
+            ]}
+            onPress={handleSendMessage}
+            disabled={!message.trim() || isTyping}
+          >
+            <Ionicons 
+              name="send" 
+              size={20} 
+              color="white" 
+            />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -243,143 +298,136 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardContainer: {
-    flex: 1,
-  },
   header: {
+    padding: 12,
+    borderBottomWidth: 1,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 70,
-    paddingBottom: 8,
+    marginRight: 12,
+  },
+  avatarEmoji: {
+    fontSize: 20,
+  },
+  headerText: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    textAlign: 'center',
   },
-  scrollContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  scrollContent: {
-    paddingBottom: 16, // Menos padding ya que KeyboardAvoidingView maneja el espacio
-    flexGrow: 1,
-  },
-  botMessageContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    paddingVertical: 16,
-  },
-  botAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  messageContainer: {
-    flex: 1,
-    gap: 4,
-  },
-  botName: {
+  headerSubtitle: {
     fontSize: 13,
-    fontWeight: 'normal',
-    maxWidth: 360,
+    marginTop: 1,
   },
-  messageBubble: {
-    maxWidth: 360,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  messageText: {
-    fontSize: 16,
-    fontWeight: 'normal',
-    lineHeight: 22,
-  },
-  chipsContainer: {
-    paddingVertical: 12,
-  },
-  chipsContent: {
+  headerRight: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 4,
-  },
-  chip: {
-    height: 32,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    justifyContent: 'center',
     alignItems: 'center',
   },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  inputSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  inputContainer: {
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    borderRadius: 12,
-    minHeight: 48,
-    maxHeight: 120,
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    textAlignVertical: 'top',
-  },
-  attachButton: {
-    padding: 12,
-    marginRight: 4,
-  },
-  sendButton: {
+  headerButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: 16,
+    flexGrow: 1,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    padding: 20,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  messageContainer: {
+    marginVertical: 4,
+  },
+  userMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  botMessageContainer: {
+    alignItems: 'flex-start',
+  },
+  messageBubble: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  userBubble: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  botBubble: {
+    // backgroundColor y borderColor se definen dinámicamente
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  timestamp: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+  typingText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    borderTopWidth: 1,
+    alignItems: 'flex-end',
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxHeight: 100,
+    fontSize: 16,
+    marginRight: 8,
+  },
+  sendButton: {
+    borderRadius: 20,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
-    marginBottom: 6,
-  },
-  disclaimer: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  messageWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginVertical: 4,
-    paddingHorizontal: 16,
-  },
-  botMessageWrapper: {
-    justifyContent: 'flex-start',
-  },
-  userMessageWrapper: {
-    justifyContent: 'flex-end',
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: 'right',
   },
 });
