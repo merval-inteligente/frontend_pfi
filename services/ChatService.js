@@ -16,7 +16,27 @@ class ChatService {
    */
   async initialize(userToken) {
     try {
-      this.token = userToken;
+      // Validar que el token sea un JWT
+      if (!userToken || typeof userToken !== 'string') {
+        throw new Error('Token inválido: no es una cadena');
+      }
+
+      // Un JWT debe tener exactamente 3 partes separadas por puntos
+      const parts = userToken.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Token inválido: no tiene formato JWT (debe tener 3 partes)');
+      }
+
+      // Verificar que cada parte sea base64 válida
+      try {
+        atob(parts[0]); // header
+        atob(parts[1]); // payload
+        // parts[2] es la signature, no necesariamente base64 puro
+      } catch (_e) {
+        throw new Error('Token inválido: no es base64 válido');
+      }
+
+      this.token = userToken.trim(); // Eliminar espacios en blanco
       
       // Verificar que el chat service esté disponible
       const healthCheck = await this.checkHealth();
@@ -56,33 +76,39 @@ class ChatService {
   }
 
   /**
-   * Crear token de autenticación para el chat service
+   * Autenticar usuario - usar directamente el token del backend
    */
   async authenticate(userId) {
     try {
       this.userId = userId;
       
-      const response = await fetch(`${this.baseUrl}/auth/token?user_id=${userId}`, {
-        method: 'POST',
+      if (!this.token) {
+        throw new Error('No hay token del backend principal');
+      }
+
+      // Verificar que el token sea válido en el backend principal
+      const response = await fetch(`${this.backendUrl}/api/auth/verify`, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          ...(this.token && { 'X-Backend-Token': this.token })
+          'Authorization': `Bearer ${this.token}`
         }
       });
 
       if (!response.ok) {
-        throw new Error(`Auth failed: ${response.status}`);
+        const errorText = await response.text();
+        console.log('🔍 Error response:', errorText);
+        throw new Error(`Token inválido: ${response.status}`);
       }
 
       const data = await response.json();
       
-      // Guardar token del chat service
-      await AsyncStorage.setItem('chat_token', data.access_token);
+      // Usar directamente el token del backend para el chat service
+      console.log('✅ Usuario autenticado en chat service:', data.data.user.name);
       
       return {
         success: true,
-        chatToken: data.access_token,
-        expiresIn: data.expires_in
+        user: data.data.user,
+        backendToken: this.token
       };
     } catch (error) {
       console.error('❌ Chat authentication error:', error);
@@ -91,33 +117,18 @@ class ChatService {
   }
 
   /**
-   * Obtener token del chat service desde storage
-   */
-  async getChatToken() {
-    try {
-      const chatToken = await AsyncStorage.getItem('chat_token');
-      return chatToken;
-    } catch (error) {
-      console.error('❌ Error getting chat token:', error);
-      return null;
-    }
-  }
-
-  /**
    * Enviar mensaje al chat
    */
   async sendMessage(message) {
     try {
-      const chatToken = await this.getChatToken();
-      
-      if (!chatToken) {
-        throw new Error('No hay token de chat disponible');
+      if (!this.token) {
+        throw new Error('No hay token de backend disponible');
       }
 
-      const response = await fetch(`${this.baseUrl}/chat/send`, {
+      const response = await fetch(`${this.baseUrl}/api/chat/message`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${chatToken}`,
+          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
@@ -131,15 +142,16 @@ class ChatService {
       }
 
       const data = await response.json();
+      console.log('🔍 Chat service response:', data);
       
       return {
         success: true,
         messageId: data.message_id,
-        userMessage: data.user_message,
-        assistantResponse: data.assistant_response,
+        userMessage: message,
+        assistantResponse: data.response, // El backend devuelve 'response', no 'assistant_response'
         timestamp: data.timestamp,
-        personalized: data.personalized || false,
-        hasContext: data.user_context !== null
+        personalized: true,
+        hasContext: true
       };
     } catch (error) {
       console.error('❌ Send message error:', error);
@@ -152,15 +164,13 @@ class ChatService {
    */
   async getChatHistory(limit = 50) {
     try {
-      const chatToken = await this.getChatToken();
-      
-      if (!chatToken || !this.userId) {
+      if (!this.token || !this.userId) {
         throw new Error('No hay autenticación disponible');
       }
 
-      const response = await fetch(`${this.baseUrl}/chat/history/${this.userId}?limit=${limit}`, {
+      const response = await fetch(`${this.baseUrl}/api/chat/history/${this.userId}?limit=${limit}`, {
         headers: {
-          'Authorization': `Bearer ${chatToken}`,
+          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -173,8 +183,8 @@ class ChatService {
       
       return {
         success: true,
-        messages: data.messages || [],
-        total: data.total || 0
+        messages: data.history || [],
+        total: data.total_messages || 0
       };
     } catch (error) {
       console.error('❌ Get history error:', error);
@@ -187,15 +197,14 @@ class ChatService {
    */
   async getUserContext() {
     try {
-      const chatToken = await this.getChatToken();
-      
-      if (!chatToken || !this.userId) {
+      if (!this.token || !this.userId) {
         throw new Error('No hay autenticación disponible');
       }
 
-      const response = await fetch(`${this.baseUrl}/chat/context/${this.userId}`, {
+      // Este endpoint no existe en el chat service actual, 
+      // podemos usar el health check para verificar conectividad
+      const response = await fetch(`${this.baseUrl}/health`, {
         headers: {
-          'Authorization': `Bearer ${chatToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -208,9 +217,9 @@ class ChatService {
       
       return {
         success: true,
-        hasProfile: data.has_profile,
-        hasPreferences: data.has_preferences,
-        hasPortfolio: data.has_portfolio,
+        hasProfile: true, // Asumimos que si tenemos token, hay perfil
+        hasPreferences: true,
+        hasPortfolio: false, // Por ahora no manejamos portfolio
         backendConnected: data.backend_connected
       };
     } catch (error) {
@@ -237,8 +246,7 @@ class ChatService {
    * Verificar si está autenticado
    */
   async isAuthenticated() {
-    const chatToken = await this.getChatToken();
-    return chatToken !== null && this.userId !== null;
+    return this.token !== null && this.userId !== null;
   }
 }
 

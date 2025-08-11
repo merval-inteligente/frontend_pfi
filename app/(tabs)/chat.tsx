@@ -4,15 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import chatService from '../../services/ChatService';
 
@@ -49,49 +49,51 @@ export default function ChatScreen() {
 
   const initializeChatService = async () => {
     try {
-      let userToken = await AsyncStorage.getItem('userToken');
-      let userId = await AsyncStorage.getItem('userId');
-
-      if (!userToken) {
-        userToken = 'demo_token_123';
-        userId = 'demo_user';
-        await AsyncStorage.setItem('userToken', userToken);
-        await AsyncStorage.setItem('userId', userId);
+      // Obtener el JWT real del backend desde AsyncStorage
+      let userToken = await AsyncStorage.getItem('@auth_token');
+      let userSession = await AsyncStorage.getItem('@user_session');
+      
+      if (!userToken || !userSession) {
+        console.log('⚠️ No hay sesión de usuario, el chat no funcionará');
+        // Agregar mensaje de error para el usuario
+        const errorMessage: ChatMessage = {
+          id: 'error_' + Date.now().toString(),
+          text: 'Para usar el chat, necesitas iniciar sesión primero.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages([errorMessage]);
+        return;
       }
 
-      await chatService.initialize(userToken);
-      await chatService.authenticate(userId!);
-      console.log('✅ Chat inicializado');
-    } catch (error) {
-      console.log('⚠️ Usando modo offline');
-    }
-  };
+      // Obtener el userId del usuario autenticado
+      const user = JSON.parse(userSession);
+      const userId = user.id;
 
-  const generateFallbackResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    const responses = [
-      'Como analista financiero, puedo decirte que el mercado argentino ofrece oportunidades interesantes en este momento.',
-      'Basándome en las condiciones actuales, recomiendo diversificar entre sectores defensivos y de crecimiento.',
-      'El MERVAL ha mostrado buen momentum últimamente. ¿Te interesa algún sector en particular?',
-      'Para tu perfil de inversor, sugiero evaluar las líderes del panel: GGAL, YPF y ALUA.',
-      'El contexto macro actual favorece acciones con dividendo y fundamentals sólidos.',
-      'Considera rebalancear tu portfolio según las condiciones del mercado actual.'
-    ];
-    
-    if (lowerMessage.includes('precio') || lowerMessage.includes('cotiza')) {
-      return 'GGAL cotiza en $850, YPF en $920 y ALUA en $445. Todas muestran buen potencial según mi análisis.';
+      await chatService.initialize(userToken);
+      await chatService.authenticate(userId);
+      console.log('✅ Chat inicializado con JWT real para usuario:', user.name);
+      
+      // Agregar mensaje de bienvenida
+      const welcomeMessage: ChatMessage = {
+        id: 'welcome_' + Date.now().toString(),
+        text: `¡Hola ${user.name}! 👋 Soy tu asistente financiero argentino. Puedo ayudarte con análisis del MERVAL, información de acciones, bonos, dólar y criptomonedas. ¿En qué puedo ayudarte hoy?`,
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages([welcomeMessage]);
+      
+    } catch {
+      console.log('⚠️ Error inicializando chat, funcionalidad limitada');
+      // Agregar mensaje de error técnico
+      const errorMessage: ChatMessage = {
+        id: 'error_' + Date.now().toString(),
+        text: 'Hay un problema técnico con el chat. Por favor, intenta más tarde.',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages([errorMessage]);
     }
-    
-    if (lowerMessage.includes('merval') || lowerMessage.includes('índice')) {
-      return 'El MERVAL cerró en 2,180,450 puntos (+1.2%). Sesión positiva liderada por bancos y energía.';
-    }
-    
-    if (lowerMessage.includes('recomend') || lowerMessage.includes('invertir')) {
-      return 'Para tu perfil, sugiero: 40% bancos (GGAL, SUPV), 30% energía (YPF), 30% industriales (ALUA, PAM).';
-    }
-    
-    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleSendMessage = async () => {
@@ -111,36 +113,37 @@ export default function ChatScreen() {
 
     try {
       const response = await chatService.sendMessage(messageText);
+      console.log('🔍 Frontend - Chat response:', response);
       
-      let botResponseText;
-      if (response.success) {
-        botResponseText = response.assistantResponse;
+      if (response.success && response.assistantResponse) {
+        console.log('✅ Frontend - Using AI response');
+        const botMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          text: response.assistantResponse,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setTimeout(() => {
+          setMessages(prev => [...prev, botMessage]);
+          setIsTyping(false);
+        }, 800);
       } else {
-        botResponseText = generateFallbackResponse(messageText);
+        // Error en la respuesta del servicio
+        throw new Error('No se pudo obtener respuesta del chat service');
       }
 
-      setTimeout(() => {
-        const botMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          text: botResponseText,
-          sender: 'bot',
-          timestamp: new Date()
-        };
-
-        setMessages(prev => [...prev, botMessage]);
-        setIsTyping(false);
-      }, 800);
-
     } catch (error) {
-      setTimeout(() => {
-        const botMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          text: generateFallbackResponse(messageText),
-          sender: 'bot',
-          timestamp: new Date()
-        };
+      console.log('❌ Frontend - Chat error:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: 'Lo siento, no puedo responder en este momento. Por favor, intenta más tarde.',
+        sender: 'bot',
+        timestamp: new Date()
+      };
 
-        setMessages(prev => [...prev, botMessage]);
+      setTimeout(() => {
+        setMessages(prev => [...prev, errorMessage]);
         setIsTyping(false);
       }, 800);
     }
@@ -300,6 +303,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 12,
+    paddingTop: Platform.OS === 'ios' ? 65 : 50, // +10px más para separación perfecta
     borderBottomWidth: 1,
   },
   headerContent: {
