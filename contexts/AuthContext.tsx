@@ -8,7 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string, rememberCredentials?: boolean) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, password: string, name: string, investmentKnowledge?: string, riskAppetite?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
   getSavedCredentials: () => Promise<{email: string; password: string} | null>;
@@ -192,7 +192,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const register = async (email: string, password: string, name: string) => {
+  const register = async (email: string, password: string, name: string, investmentKnowledge?: string, riskAppetite?: string) => {
     try {
       setIsLoading(true);
       
@@ -222,7 +222,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         password,
         name,
-        acceptTerms: true // Siempre true cuando llega aquí
+        acceptTerms: true, // Siempre true cuando llega aquí
+        ...(investmentKnowledge && { investmentKnowledge }),
+        ...(riskAppetite && { riskAppetite })
       };
       
       // Usar la función signUp del backend real

@@ -19,7 +19,7 @@ import {
   View,
 } from 'react-native';
 
-type OnboardingStep = 'register' | 'knowledge' | 'risk' | 'sectors' | 'welcome';
+type OnboardingStep = 'register' | 'knowledge1' | 'knowledge2' | 'knowledge3' | 'risk1' | 'risk2' | 'risk3' | 'sectors' | 'welcome';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -35,6 +35,17 @@ export default function RegisterScreen() {
     confirmPassword: '',
   });
   const [onboardingData, setOnboardingData] = useState({
+    // Respuestas individuales para evaluar conocimiento
+    knowledgeQ1: '', // ¿Sabes qué es una acción?
+    knowledgeQ2: '', // Comprensión de inflación
+    knowledgeQ3: '', // Conocimiento del MERVAL
+    
+    // Respuestas individuales para evaluar riesgo
+    riskQ1: '', // Personalidad financiera
+    riskQ2: '', // Situación hipotética con dinero
+    riskQ3: '', // Paciencia financiera
+    
+    // Valores calculados (se determinan automáticamente)
     investmentKnowledge: '',
     riskAppetite: '',
     sectors: [] as string[],
@@ -84,18 +95,46 @@ export default function RegisterScreen() {
 
   const handleNext = () => {
     if (currentStep === 'welcome') {
-      setCurrentStep('knowledge');
-    } else if (currentStep === 'knowledge') {
-      if (!onboardingData.investmentKnowledge) {
-        Alert.alert('Error', 'Por favor selecciona tu nivel de conocimiento');
+      setCurrentStep('knowledge1');
+    } else if (currentStep === 'knowledge1') {
+      if (!onboardingData.knowledgeQ1) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
         return;
       }
-      setCurrentStep('risk');
-    } else if (currentStep === 'risk') {
-      if (!onboardingData.riskAppetite) {
-        Alert.alert('Error', 'Por favor selecciona tu apetito de riesgo');
+      setCurrentStep('knowledge2');
+    } else if (currentStep === 'knowledge2') {
+      if (!onboardingData.knowledgeQ2) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
         return;
       }
+      setCurrentStep('knowledge3');
+    } else if (currentStep === 'knowledge3') {
+      if (!onboardingData.knowledgeQ3) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
+        return;
+      }
+      // Calcular investmentKnowledge basado en las respuestas
+      calculateInvestmentKnowledge();
+      setCurrentStep('risk1');
+    } else if (currentStep === 'risk1') {
+      if (!onboardingData.riskQ1) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
+        return;
+      }
+      setCurrentStep('risk2');
+    } else if (currentStep === 'risk2') {
+      if (!onboardingData.riskQ2) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
+        return;
+      }
+      setCurrentStep('risk3');
+    } else if (currentStep === 'risk3') {
+      if (!onboardingData.riskQ3) {
+        Alert.alert('Error', 'Por favor selecciona una respuesta');
+        return;
+      }
+      // Calcular riskAppetite basado en las respuestas
+      calculateRiskAppetite();
       setCurrentStep('sectors');
     } else if (currentStep === 'sectors') {
       // Completar registro y login
@@ -104,15 +143,71 @@ export default function RegisterScreen() {
   };
 
   const handleBack = () => {
-    if (currentStep === 'knowledge') {
+    if (currentStep === 'knowledge1') {
       setCurrentStep('welcome');
-    } else if (currentStep === 'risk') {
-      setCurrentStep('knowledge');
+    } else if (currentStep === 'knowledge2') {
+      setCurrentStep('knowledge1');
+    } else if (currentStep === 'knowledge3') {
+      setCurrentStep('knowledge2');
+    } else if (currentStep === 'risk1') {
+      setCurrentStep('knowledge3');
+    } else if (currentStep === 'risk2') {
+      setCurrentStep('risk1');
+    } else if (currentStep === 'risk3') {
+      setCurrentStep('risk2');
     } else if (currentStep === 'sectors') {
-      setCurrentStep('risk');
+      setCurrentStep('risk3');
     } else if (currentStep === 'welcome') {
       setCurrentStep('register');
     }
+  };
+
+  // Función para calcular el nivel de conocimiento basado en las respuestas
+  const calculateInvestmentKnowledge = () => {
+    let score = 0;
+    
+    // Pregunta 1: ¿Sabes qué es una acción?
+    if (onboardingData.knowledgeQ1 === 'Tengo una idea general') score += 1;
+    else if (onboardingData.knowledgeQ1 === 'Sí, entiendo el concepto') score += 2;
+    
+    // Pregunta 2: Comprensión de inflación
+    if (onboardingData.knowledgeQ2 === 'Probablemente compre menos cosas') score += 1;
+    else if (onboardingData.knowledgeQ2 === 'Definitivamente perderá valor por la inflación') score += 2;
+    
+    // Pregunta 3: Conocimiento del MERVAL
+    if (onboardingData.knowledgeQ3 === 'Creo que es algo de la bolsa') score += 1;
+    else if (onboardingData.knowledgeQ3 === 'Sí, es el índice de la Bolsa de Buenos Aires') score += 2;
+    
+    // Calcular nivel basado en puntaje total (0-6)
+    let knowledge = 'Principiante';
+    if (score >= 4) knowledge = 'Avanzado';
+    else if (score >= 2) knowledge = 'Intermedio';
+    
+    setOnboardingData(prev => ({ ...prev, investmentKnowledge: knowledge }));
+  };
+
+  // Función para calcular el apetito de riesgo basado en las respuestas
+  const calculateRiskAppetite = () => {
+    let score = 0;
+    
+    // Pregunta 1: Personalidad financiera
+    if (onboardingData.riskQ1 === 'Analizo pros y contras') score += 1;
+    else if (onboardingData.riskQ1 === 'Me gusta apostar por grandes oportunidades') score += 2;
+    
+    // Pregunta 2: Situación hipotética con dinero
+    if (onboardingData.riskQ2 === 'Buscar algo que me dé más ganancia pero sea relativamente seguro') score += 1;
+    else if (onboardingData.riskQ2 === 'Arriesgar para intentar ganar mucho más') score += 2;
+    
+    // Pregunta 3: Paciencia financiera
+    if (onboardingData.riskQ3 === 'Puedo esperar algunos meses') score += 1;
+    else if (onboardingData.riskQ3 === 'No me molesta esperar años si vale la pena') score += 2;
+    
+    // Calcular nivel basado en puntaje total (0-6)
+    let riskLevel = 'Bajo';
+    if (score >= 4) riskLevel = 'Alto';
+    else if (score >= 2) riskLevel = 'Medio';
+    
+    setOnboardingData(prev => ({ ...prev, riskAppetite: riskLevel }));
   };
 
   const completeRegistration = async () => {
@@ -149,17 +244,27 @@ export default function RegisterScreen() {
         return;
       }
       
-      // Primero registrar el usuario
-      await register(formData.email, formData.password, formData.name);
+      // Primero registrar el usuario con el perfil de evaluación
+      await register(
+        formData.email, 
+        formData.password, 
+        formData.name,
+        onboardingData.investmentKnowledge,
+        onboardingData.riskAppetite
+      );
       
       // Esperar un momento para que el backend procese completamente el usuario
       await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
       
+      // Obtener el token del usuario recién registrado
+      let token = await AsyncStorage.getItem('@auth_token');
+      
+      if (token) {
+        console.log('✅ Usuario registrado con perfil de evaluación exitosamente');
+      }
+      
       // Intentar actualizar la lista de sectores con el nuevo token
       await loadAvailableSectors();
-      
-      // Obtener el token del usuario recién registrado
-      const token = await AsyncStorage.getItem('@auth_token');
       
       if (token && onboardingData.sectors.length > 0) {
         // Guardar las preferencias de sectores seleccionadas
@@ -290,7 +395,7 @@ export default function RegisterScreen() {
   };
 
   const getProgressDots = () => {
-    const steps = ['welcome', 'knowledge', 'risk', 'sectors'];
+    const steps = ['welcome', 'knowledge1', 'knowledge2', 'knowledge3', 'risk1', 'risk2', 'risk3', 'sectors'];
     const currentIndex = steps.indexOf(currentStep);
     
     return steps.map((_, index) => (
@@ -504,8 +609,8 @@ export default function RegisterScreen() {
     );
   }
 
-  // Pantalla de conocimiento de inversión
-  if (currentStep === 'knowledge') {
+  // Pantalla de evaluación de conocimientos - Pregunta 1
+  if (currentStep === 'knowledge1') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
@@ -515,27 +620,27 @@ export default function RegisterScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Conocimiento de Inversión</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Conocimientos</Text>
         </View>
 
         <View style={styles.onboardingContent}>
           <View style={styles.onboardingMain}>
             <Text style={[styles.onboardingTitle, { color: colors.text }]}>
-              ¿Qué tan familiarizado estás con las inversiones?
+              ¿Sabes qué es una acción?
             </Text>
             
             <View style={styles.optionsContainer}>
-              {['Principiante', 'Intermedio', 'Avanzado'].map((option) => (
+              {['No', 'Tengo una idea general', 'Sí, entiendo el concepto'].map((option) => (
                 <TouchableOpacity
                   key={option}
                   style={[
                     styles.optionButton,
                     {
-                      borderColor: onboardingData.investmentKnowledge === option ? '#8CD279' : colors.cardBorder,
-                      borderWidth: onboardingData.investmentKnowledge === option ? 3 : 1,
+                      borderColor: onboardingData.knowledgeQ1 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.knowledgeQ1 === option ? 3 : 1,
                     }
                   ]}
-                  onPress={() => updateOnboardingData('investmentKnowledge', option)}
+                  onPress={() => updateOnboardingData('knowledgeQ1', option)}
                 >
                   <Text style={[styles.optionText, { color: colors.text }]}>
                     {option}
@@ -562,8 +667,8 @@ export default function RegisterScreen() {
     );
   }
 
-  // Pantalla de apetito de riesgo
-  if (currentStep === 'risk') {
+  // Pantalla de evaluación de conocimientos - Pregunta 2
+  if (currentStep === 'knowledge2') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
@@ -573,27 +678,259 @@ export default function RegisterScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Apetito de Riesgo</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Conocimientos</Text>
         </View>
 
         <View style={styles.onboardingContent}>
           <View style={styles.onboardingMain}>
             <Text style={[styles.onboardingTitle, { color: colors.text }]}>
-              ¿Cuál es tu apetito de riesgo?
+              Si guardas $100 en una caja durante 10 años, ¿qué pasará con tu poder de compra?
             </Text>
             
             <View style={styles.optionsContainer}>
-              {['Bajo', 'Medio', 'Alto'].map((option) => (
+              {['Será el mismo', 'Probablemente compre menos cosas', 'Definitivamente perderá valor por la inflación'].map((option) => (
                 <TouchableOpacity
                   key={option}
                   style={[
                     styles.optionButton,
                     {
-                      borderColor: onboardingData.riskAppetite === option ? '#8CD279' : colors.cardBorder,
-                      borderWidth: onboardingData.riskAppetite === option ? 3 : 1,
+                      borderColor: onboardingData.knowledgeQ2 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.knowledgeQ2 === option ? 3 : 1,
                     }
                   ]}
-                  onPress={() => updateOnboardingData('riskAppetite', option)}
+                  onPress={() => updateOnboardingData('knowledgeQ2', option)}
+                >
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#8CD279' }]}
+              onPress={handleNext}
+            >
+              <Text style={styles.primaryButtonText}>Siguiente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressDots}>
+              {getProgressDots()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Pantalla de evaluación de conocimientos - Pregunta 3
+  if (currentStep === 'knowledge3') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Conocimientos</Text>
+        </View>
+
+        <View style={styles.onboardingContent}>
+          <View style={styles.onboardingMain}>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>
+              ¿Escuchaste alguna vez hablar del MERVAL?
+            </Text>
+            
+            <View style={styles.optionsContainer}>
+              {['No sé qué es', 'Creo que escuche alguna vez', 'Sí, es el índice de la Bolsa de Argentina'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.optionButton,
+                    {
+                      borderColor: onboardingData.knowledgeQ3 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.knowledgeQ3 === option ? 3 : 1,
+                    }
+                  ]}
+                  onPress={() => updateOnboardingData('knowledgeQ3', option)}
+                >
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#8CD279' }]}
+              onPress={handleNext}
+            >
+              <Text style={styles.primaryButtonText}>Siguiente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressDots}>
+              {getProgressDots()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Pantalla de evaluación de riesgo - Pregunta 1
+  if (currentStep === 'risk1') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Riesgo</Text>
+        </View>
+
+        <View style={styles.onboardingContent}>
+          <View style={styles.onboardingMain}>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>
+              Si tienes $1000 ahorrados, ¿qué preferirías hacer?
+            </Text>
+            
+            <View style={styles.optionsContainer}>
+              {['Dejarlos en el banco sin riesgo', 'Invertir la mitad y dejar la mitad segura', 'Invertir todo para obtener mejores ganancias'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.optionButton,
+                    {
+                      borderColor: onboardingData.riskQ1 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.riskQ1 === option ? 3 : 1,
+                    }
+                  ]}
+                  onPress={() => updateOnboardingData('riskQ1', option)}
+                >
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#8CD279' }]}
+              onPress={handleNext}
+            >
+              <Text style={styles.primaryButtonText}>Siguiente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressDots}>
+              {getProgressDots()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Pantalla de evaluación de riesgo - Pregunta 2
+  if (currentStep === 'risk2') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Riesgo</Text>
+        </View>
+
+        <View style={styles.onboardingContent}>
+          <View style={styles.onboardingMain}>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>
+              Imagina que compraste una acción y al día siguiente perdió 10% de su valor. ¿Qué harías?
+            </Text>
+            
+            <View style={styles.optionsContainer}>
+              {['La vendería inmediatamente para no perder más', 'Esperaría un poco', 'La mantendría y hasta compraría más si creo en la empresa'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.optionButton,
+                    {
+                      borderColor: onboardingData.riskQ2 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.riskQ2 === option ? 3 : 1,
+                    }
+                  ]}
+                  onPress={() => updateOnboardingData('riskQ2', option)}
+                >
+                  <Text style={[styles.optionText, { color: colors.text }]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#8CD279' }]}
+              onPress={handleNext}
+            >
+              <Text style={styles.primaryButtonText}>Siguiente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={styles.progressDots}>
+              {getProgressDots()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Pantalla de evaluación de riesgo - Pregunta 3
+  if (currentStep === 'risk3') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Evaluación de Riesgo</Text>
+        </View>
+
+        <View style={styles.onboardingContent}>
+          <View style={styles.onboardingMain}>
+            <Text style={[styles.onboardingTitle, { color: colors.text }]}>
+              Tu amigo te cuenta que ganó mucho dinero invirtiendo en una empresa nueva. ¿Qué harías?
+            </Text>
+            
+            <View style={styles.optionsContainer}>
+              {['Prefiero no arriesgar mi dinero', 'Investigaría un poco antes de decidir', 'Invertiría porque confío en mi amigo'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.optionButton,
+                    {
+                      borderColor: onboardingData.riskQ3 === option ? '#8CD279' : colors.cardBorder,
+                      borderWidth: onboardingData.riskQ3 === option ? 3 : 1,
+                    }
+                  ]}
+                  onPress={() => updateOnboardingData('riskQ3', option)}
                 >
                   <Text style={[styles.optionText, { color: colors.text }]}>
                     {option}

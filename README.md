@@ -1,200 +1,118 @@
 # 📈 MERVAL Guide
 
-Una aplicación multiplataforma para el seguimiento y análisis del mercado financiero argentino (MERVAL), desarrollada con React Native y Expo. Actualmente disponible para dispositivos móviles con expansión planificada para plataforma web.
+> Aplicación móvil educativa para aprender sobre inversiones en el mercado argentino
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android%20%7C%20Web%20(próximamente)-lightgrey.svg)
 ![React Native](https://img.shields.io/badge/React%20Native-Expo-61DAFB.svg)
+![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)
 
-## 🚀 Características Principales
+## ¿Qué es?
 
-### 💰 Gestión Financiera
-- **Dashboard Principal**: Vista consolidada de tus inversiones y tendencias del mercado
-- **Seguimiento de Acciones**: Monitoreo en tiempo real de precios y variaciones
-- **Favoritos Personalizados**: Guarda y organiza tus acciones preferidas por sectores
-- **Alertas Inteligentes**: Configuración de notificaciones para cambios importantes
+Una plataforma educativa que ayuda a usuarios sin experiencia a aprender sobre inversiones en el mercado de valores argentino (MERVAL). 
 
-### 🤖 Chat Inteligente
-- **Asistente IA**: Chat integrado para consultas sobre el mercado financiero
-- **Historial de Conversaciones**: Mantiene el contexto de tus consultas anteriores
-- **Respuestas Especializadas**: Información específica sobre MERVAL y acciones argentinas
+**Importante**: Esta app es solo educativa - no permite realizar transacciones reales.
 
-### 👤 Gestión de Usuario
-- **Autenticación Segura**: Sistema de login/registro con JWT
-- **Perfil Personalizable**: Configuración de preferencias y temas
-- **Onboarding Intuitivo**: Proceso guiado para nuevos usuarios
-- **Recuperación de Contraseña**: Sistema seguro de reset de credenciales
+## Características
 
-### ⚙️ Configuración Avanzada
-- **Temas Adaptativos**: Modo claro, oscuro y automático
-- **Gestión de Notificaciones**: Control granular de alertas
-- **Sincronización en la Nube**: Backup automático de preferencias
-- **Centro de Ayuda**: Documentación y soporte integrado
+### 🎓 Aprendizaje
+- **Evaluación de perfil**: Determina tu nivel de conocimiento y tolerancia al riesgo
+- **Chat educativo**: IA especializada que responde dudas sobre inversiones
+- **Contenido didáctico**: Explicaciones simples de conceptos financieros
 
-## 🏗️ Arquitectura Técnica
+### 📊 Exploración
+- **Seguimiento de acciones**: Visualiza precios y tendencias del MERVAL
+- **Favoritos por sectores**: Organiza acciones de tu interés
+- **Alertas educativas**: Notificaciones sobre cambios importantes
 
-### Stack Tecnológico
-- **Frontend**: React Native con Expo Router (multiplataforma)
-- **Navegación**: File-based routing con tabs y stack navigation
-- **Estado Global**: Context API para autenticación y preferencias
-- **Almacenamiento**: AsyncStorage para datos locales
-- **UI/UX**: Componentes nativos con temas adaptativos
-- **APIs**: Integración con servicios backend y chat IA
-- **Web**: Expansión planificada con compatibilidad web nativa de Expo
+### 👤 Personalización
+- **Perfil de inversor**: Basado en evaluación de 6 preguntas
+- **Preferencias**: Sectores y acciones de interés
+- **Temas**: Modo claro/oscuro automático
 
-### Estructura del Proyecto
+## Tecnología
+
+- **React Native + Expo**: Aplicación multiplataforma
+- **Context API**: Gestión de estado (Auth, Theme, Preferences)
+- **APIs REST**: Backend con autenticación JWT
+- **AsyncStorage**: Almacenamiento local
+- **Chat IA**: Servicio especializado en mercado argentino
+
+## Instalación
+
+```bash
+# Clonar proyecto
+git clone [repository-url]
+cd pfi
+
+# Instalar dependencias
+npm install
+
+# Iniciar desarrollo
+npm start
+```
+
+## Scripts
+
+```bash
+npm start          # Servidor de desarrollo
+npm run android    # Emulador Android
+npm run ios        # Simulador iOS
+```
+
+## Estructura
+
 ```
 app/
-├── (tabs)/              # Navegación principal por tabs
-│   ├── index.tsx        # Dashboard principal
-│   ├── explore.tsx      # Explorar mercado
-│   ├── chat.tsx         # Chat inteligente
-│   ├── alerts.tsx       # Gestión de alertas
-│   ├── preferences.tsx  # Configuración de favoritos
-│   └── profile.tsx      # Perfil de usuario
-├── _layout.tsx          # Layout principal
-├── login.tsx           # Autenticación
-├── register.tsx        # Registro/Onboarding
-├── welcome.tsx         # Pantalla de bienvenida
-└── ...                 # Pantallas adicionales
+├── (tabs)/        # Navegación principal
+│   ├── index.tsx      # Dashboard
+│   ├── explore.tsx    # Explorar acciones
+│   ├── chat.tsx       # Chat educativo
+│   └── profile.tsx    # Perfil usuario
+├── login.tsx      # Autenticación
+├── register.tsx   # Registro con evaluación
+└── welcome.tsx    # Bienvenida
 
-components/              # Componentes reutilizables
-├── ui/                 # Componentes de interfaz
-├── ThemedView.tsx      # Componentes con temas
-└── ...
-
-contexts/               # Gestión de estado global
-├── AuthContext.tsx     # Autenticación
-├── ThemeContext.tsx    # Temas
-└── PreferencesContext.tsx  # Preferencias
-
-controller/             # Lógica de negocio
-├── apiController.ts    # Funciones API
-└── webservices.ts      # Endpoints
-
-services/               # Servicios externos
-├── mockData.ts         # Datos de prueba
-└── mockup.ts          # Configuraciones mock
+components/        # Componentes reutilizables
+contexts/         # Estado global
+controller/       # APIs y lógica
 ```
 
-## 🛠️ Configuración de Desarrollo
+## APIs
 
-### Prerrequisitos
-- Node.js (v18 o superior)
-- npm o yarn
-- Expo CLI
-- Android Studio (para Android)
-- Xcode (para iOS, solo macOS)
-
-### Instalación
-
-1. **Clonar el repositorio**
-   ```bash
-   git clone [repository-url]
-   cd pfi
-   ```
-
-2. **Instalar dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Configurar variables de entorno**
-   ```bash
-   # Crear archivo .env con las configuraciones necesarias
-   cp .env.example .env
-   ```
-
-4. **Iniciar el servidor de desarrollo**
-   ```bash
-   npm start
-   ```
-
-### Scripts Disponibles
-
-- `npm start` - Inicia Expo Dev Server
-- `npm run android` - Ejecuta en emulador Android
-- `npm run ios` - Ejecuta en simulador iOS
-- `npm run web` - Ejecuta en navegador web
-- `npm run lint` - Ejecuta ESLint
-
-## 📱 Deployment
-
-### Build de Producción
-
-1. **Android**
-   ```bash
-   npx expo build:android
-   ```
-
-2. **iOS**
-   ```bash
-   npx expo build:ios
-   ```
-
-3. **Web** (próximamente)
-   ```bash
-   npx expo export:web
-   ```
-
-### Configuración de Release
-- **Bundle ID**: `com.nicolas.mervalguide`
-- **Scheme**: `mervalguide`
-- **Versión**: 1.0.0
-- **Plataformas**: iOS, Android, Web (en desarrollo)
-
-## 🔧 Configuración de Backend
-
-### APIs Integradas
-- **Autenticación**: Sistema JWT con refresh tokens
-- **Datos Financieros**: APIs de MERVAL y mercado argentino
-- **Chat IA**: Servicio de chat inteligente en puerto 8084
-- **Preferencias**: Gestión de favoritos y configuraciones
-
-### Endpoints Principales
+### Backend Principal
 ```
-Base URL: http://192.168.1.58
+http://192.168.0.17:8080/api
 
-Authentication:
-- POST /auth/login
-- POST /auth/register
-- POST /auth/refresh
-
-User Preferences:
-- GET /user/preferences
-- PATCH /user/preferences
-- POST /user/favorites/stocks
-- DELETE /user/favorites/stocks
-
-Market Data:
-- GET /sectors
-- GET /stocks
-- GET /stocks/[symbol]
+POST /auth/register    # Registro con perfil
+POST /auth/login       # Inicio de sesión
+GET /user/preferences  # Favoritos del usuario
 ```
 
-## 🚀 Características Destacadas
+### Chat IA
+```
+http://192.168.0.17:8084
 
-### Sistema de Chat Inteligente
-- Integración con IA especializada en mercado financiero
-- Manejo de timeouts y fallbacks
-- Historial persistente de conversaciones
-- Respuestas contextuales sobre MERVAL
+POST /chat            # Consultas educativas
+```
 
-### Gestión de Favoritos Avanzada
-- Sincronización automática con backend
-- Organización por sectores
-- Rate limiting y manejo de errores
-- Actualización en tiempo real
+## Sistema de Evaluación
 
-### Temas Adaptativos
-- Soporte completo para modo claro/oscuro
-- Detección automática del tema del sistema
-- Transiciones suaves entre temas
-- Consistencia visual en toda la app
+### Conocimientos (3 preguntas)
+- Qué son las acciones
+- Comprensión de inflación  
+- Conocimiento del MERVAL
 
-## 🔒 Seguridad
+### Tolerancia al Riesgo (3 preguntas)
+- Preferencias de inversión
+- Reacción ante pérdidas
+- Influencia en decisiones
 
-- **Autenticación JWT**: Tokens seguros con expiración
-- **Almacenamiento Seguro**: AsyncStorage para datos sensibles
-- **Validación de Entrada**: Sanitización de datos de usuario
-- **HTTPS**: Comunicación encriptada con APIs
+### Perfiles Resultantes
+- **Conocimiento**: Principiante | Intermedio | Avanzado
+- **Riesgo**: Conservador | Moderado | Agresivo
+
+## Para quién
+
+- **Estudiantes** interesados en finanzas
+- **Principiantes** en inversiones
+- **Curiosos** del mercado argentino
+- **Educadores** que necesitan herramientas didácticas
