@@ -30,7 +30,7 @@ interface RemoveFavoriteSectorResponse {
 
 // 🔐 ENDPOINTS DE AUTENTICACIÓN
 
-export const signUp = async userData => {
+export const signUp = async (userData: any) => {
   let url = urlWebServices.signUp;
 
   try {
@@ -51,7 +51,7 @@ export const signUp = async userData => {
         uri: imageUri,
         name: `avatar.${fileType}`,
         type: `image/${fileType}`,
-      });
+      } as any);
 
       let response = await fetch(url, {
         method: 'POST',
@@ -64,35 +64,55 @@ export const signUp = async userData => {
       let data = await response.json();
 
       if (!response.ok) {
+        console.error('❌ Error en registro con avatar:', data);
         throw new Error(data.message || 'Error en el registro');
       }
 
       return data;
     } else {
       // Registro sin avatar - JSON normal
+      const requestBody = {
+        email: userData.email,
+        password: userData.password,
+        name: userData.name,
+        acceptTerms: userData.acceptTerms
+      };
+      
       let response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          email: userData.email,
-          password: userData.password,
-          name: userData.name,
-          acceptTerms: userData.acceptTerms
-        }),
+        body: JSON.stringify(requestBody),
       });
-
-      let data = await response.json();
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('❌ Error parseando JSON:', parseError);
+        const textResponse = await response.text();
+        console.error('📄 Respuesta como texto:', textResponse);
+        throw new Error('Error en la respuesta del servidor (no es JSON válido)');
+      }
 
       if (!response.ok) {
+        console.error('❌ Error en registro:', data);
+        
+        // Si hay errores de validación específicos, mostrar el primero
+        if (data.errors && data.errors.length > 0) {
+          const firstError = data.errors[0];
+          throw new Error(firstError.message || data.message || 'Error en el registro');
+        }
+        
         throw new Error(data.message || 'Error en el registro');
       }
 
       return data;
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('💥 Error en signUp:', error.message);
     throw error;
   }
 };
@@ -151,9 +171,6 @@ export const getProfile = async token => {
 export const requestPasswordReset = async (email: string) => {
   let url = urlWebServices.requestPasswordReset;
 
-  console.log('🔗 URL completa:', url);
-  console.log('📧 Email a enviar:', email);
-  console.log('🌐 Verificando conectividad al servidor...');
 
   try {
     // Verificar conectividad básica primero
@@ -167,20 +184,16 @@ export const requestPasswordReset = async (email: string) => {
       });
 
       clearTimeout(connectivityTimeoutId);
-      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
     } catch (connectivityError) {
-      console.log('❌ Servidor no reachable:', connectivityError);
       throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
     }
 
     // Crear un controlador AbortController para timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('⏰ Timeout alcanzado, abortando solicitud');
       controller.abort();
     }, 10000); // 10 segundos de timeout (reducido para desarrollo)
 
-    console.log('📡 Enviando solicitud POST...');
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -195,24 +208,18 @@ export const requestPasswordReset = async (email: string) => {
     // Limpiar el timeout si la respuesta llegó a tiempo
     clearTimeout(timeoutId);
 
-    console.log('📡 Status de respuesta:', response.status);
-    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
 
       try {
         const errorData = await response.json();
-        console.log('❌ Datos de error del servidor:', errorData);
         errorMessage = errorData.message || errorMessage;
       } catch (parseError) {
-        console.log('❌ No se pudo parsear la respuesta de error');
         // Intentar obtener el texto plano de la respuesta
         try {
           const errorText = await response.text();
-          console.log('❌ Texto de error:', errorText);
         } catch (textError) {
-          console.log('❌ No se pudo obtener el texto de error');
         }
       }
 
@@ -220,7 +227,6 @@ export const requestPasswordReset = async (email: string) => {
     }
 
     const data = await response.json();
-    console.log('✅ Datos de respuesta exitosa:', data);
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -236,10 +242,6 @@ export const requestPasswordReset = async (email: string) => {
 export const verifyResetCode = async (email: string, code: string) => {
   let url = urlWebServices.verifyResetCode;
 
-  console.log('🔐 Verificando código de reset...');
-  console.log('🔗 URL completa:', url);
-  console.log('📧 Email:', email);
-  console.log('🔢 Código:', code);
 
   try {
     // Verificar conectividad básica primero
@@ -253,20 +255,16 @@ export const verifyResetCode = async (email: string, code: string) => {
       });
 
       clearTimeout(connectivityTimeoutId);
-      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
     } catch (connectivityError) {
-      console.log('❌ Servidor no reachable:', connectivityError);
       throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
     }
 
     // Crear un controlador AbortController para timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('⏰ Timeout alcanzado, abortando solicitud de verificación');
       controller.abort();
     }, 10000); // 10 segundos de timeout
 
-    console.log('📡 Enviando solicitud de verificación POST...');
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -282,15 +280,12 @@ export const verifyResetCode = async (email: string, code: string) => {
     // Limpiar el timeout si la respuesta llegó a tiempo
     clearTimeout(timeoutId);
 
-    console.log('📡 Status de respuesta:', response.status);
-    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
 
       try {
         const errorData = await response.json();
-        console.log('❌ Datos de error del servidor:', errorData);
         
         // Manejar errores específicos del backend
         if (errorData.error === 'INVALID_CODE') {
@@ -299,12 +294,9 @@ export const verifyResetCode = async (email: string, code: string) => {
           errorMessage = errorData.message;
         }
       } catch (parseError) {
-        console.log('❌ No se pudo parsear la respuesta de error');
         try {
           const errorText = await response.text();
-          console.log('❌ Texto de error:', errorText);
         } catch (textError) {
-          console.log('❌ No se pudo obtener el texto de error');
         }
       }
 
@@ -312,7 +304,6 @@ export const verifyResetCode = async (email: string, code: string) => {
     }
 
     const data = await response.json();
-    console.log('✅ Código verificado exitosamente:', data);
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -328,11 +319,6 @@ export const verifyResetCode = async (email: string, code: string) => {
 export const resetPassword = async (email: string, code: string, newPassword: string) => {
   let url = urlWebServices.resetPassword;
 
-  console.log('🔒 Cambiando contraseña...');
-  console.log('🔗 URL completa:', url);
-  console.log('📧 Email:', email);
-  console.log('🔢 Código:', code);
-  console.log('🔐 Nueva contraseña length:', newPassword.length);
 
   try {
     // Verificar conectividad básica primero
@@ -346,20 +332,16 @@ export const resetPassword = async (email: string, code: string, newPassword: st
       });
 
       clearTimeout(connectivityTimeoutId);
-      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
     } catch (connectivityError) {
-      console.log('❌ Servidor no reachable:', connectivityError);
       throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
     }
 
     // Crear un controlador AbortController para timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('⏰ Timeout alcanzado, abortando cambio de contraseña');
       controller.abort();
     }, 10000); // 10 segundos de timeout
 
-    console.log('📡 Enviando solicitud de cambio de contraseña POST...');
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -376,15 +358,12 @@ export const resetPassword = async (email: string, code: string, newPassword: st
     // Limpiar el timeout si la respuesta llegó a tiempo
     clearTimeout(timeoutId);
 
-    console.log('📡 Status de respuesta:', response.status);
-    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
 
       try {
         const errorData = await response.json();
-        console.log('❌ Datos de error del servidor:', errorData);
         
         // Manejar errores específicos del backend
         if (errorData.error === 'INVALID_CODE') {
@@ -393,12 +372,9 @@ export const resetPassword = async (email: string, code: string, newPassword: st
           errorMessage = errorData.message;
         }
       } catch (parseError) {
-        console.log('❌ No se pudo parsear la respuesta de error');
         try {
           const errorText = await response.text();
-          console.log('❌ Texto de error:', errorText);
         } catch (textError) {
-          console.log('❌ No se pudo obtener el texto de error');
         }
       }
 
@@ -406,7 +382,6 @@ export const resetPassword = async (email: string, code: string, newPassword: st
     }
 
     const data = await response.json();
-    console.log('✅ Contraseña cambiada exitosamente:', data);
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -928,7 +903,23 @@ export const addSectorToFavorites = async (sectorName: string, token: string) =>
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || 'Error agregando sector a favoritos');
+      // Manejar errores específicos
+      if (response.status === 404) {
+        throw new Error(`Usuario no encontrado o sector "${sectorName}" no existe`);
+      } else if (response.status === 400) {
+        // Si es error de validación, intentar extraer más información
+        if (data.errors && data.errors.length > 0) {
+          const errorMsg = data.errors[0].message || `Datos de entrada inválidos para el sector "${sectorName}"`;
+          throw new Error(errorMsg);
+        }
+        throw new Error(`El sector "${sectorName}" no es válido. Verifica que esté en la lista de sectores disponibles.`);
+      } else if (response.status === 401) {
+        throw new Error('Token de autenticación inválido o expirado');
+      } else if (response.status === 500) {
+        throw new Error('Error interno del servidor. El usuario podría no estar completamente procesado aún.');
+      }
+      
+      throw new Error(data.message || `Error agregando sector "${sectorName}" a favoritos`);
     }
 
     return {
@@ -938,8 +929,17 @@ export const addSectorToFavorites = async (sectorName: string, token: string) =>
       addedSector: sectorName,
       addedSymbols: data.data.addedSymbols || []
     };
-  } catch (error) {
-    console.error('❌ Error en addSectorToFavorites:', error);
+  } catch (error: any) {
+    console.error(`❌ Error en addSectorToFavorites para sector "${sectorName}":`, error);
+    
+    // Mejorar el mensaje de error para diferentes casos
+    const errorMessage = error.message || 'Error desconocido';
+    if (errorMessage.includes('fetch')) {
+      throw new Error('Error de conexión con el servidor');
+    } else if (errorMessage.includes('JSON')) {
+      throw new Error('Error en la respuesta del servidor');
+    }
+    
     throw error;
   }
 };
@@ -1132,13 +1132,11 @@ export const removeFavoriteSector = async (token: string, sector: string): Promi
 export const checkChatHealth = async () => {
   const url = urlWebServices.chatHealth;
   
-  console.log('🏥 Checking chat health at URL:', url);
 
   try {
     // Crear un controlador AbortController para timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('⏰ Chat health check timeout');
       controller.abort();
     }, 5000); // 5 segundos de timeout
 
@@ -1153,15 +1151,12 @@ export const checkChatHealth = async () => {
     // Limpiar el timeout si la respuesta llegó a tiempo
     clearTimeout(timeoutId);
     
-    console.log('🏥 Health check response status:', response.status);
-    console.log('🏥 Health check response OK:', response.ok);
     
     if (!response.ok) {
       throw new Error(`Health check failed: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('🏥 Health check data:', data);
     
     const result = {
       success: true,
@@ -1169,7 +1164,6 @@ export const checkChatHealth = async () => {
       backendConnected: data.services?.main_backend === 'connected'
     };
     
-    console.log('🏥 Health check result:', result);
     return result;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -1228,13 +1222,11 @@ export const verifyChatAuth = async (token: string) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log('🔍 Error response:', errorText);
       throw new Error(`Token inválido: ${response.status}`);
     }
 
     const data = await response.json();
     
-    console.log('✅ Usuario autenticado en chat service:', data.data.user.name);
     
     return {
       success: true,
@@ -1264,11 +1256,9 @@ interface ChatResponse {
  * Enviar mensaje al Chat Service con fallback
  */
 export const sendChatMessage = async (token: string, message: string, userId: string, fallbackMode: boolean = false): Promise<ChatResponse> => {
-  console.log('📡 sendChatMessage called with fallbackMode:', fallbackMode);
   
   // Si estamos en modo fallback, usar respuestas básicas
   if (fallbackMode) {
-    console.log('🔄 Using fallback mode for chat response');
     
     // Simular un pequeño delay para parecer más natural
     await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
@@ -1290,11 +1280,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
   // Intentar usar el Chat Service externo
   const url = urlWebServices.chatSendMessage;
   
-  console.log('📡 sendChatMessage called with:');
-  console.log('🔗 URL:', url);
-  console.log('🔐 Token length:', token.length);
-  console.log('📝 Message:', message);
-  console.log('👤 User ID:', userId);
 
   try {
     if (!token) {
@@ -1306,12 +1291,10 @@ export const sendChatMessage = async (token: string, message: string, userId: st
       user_id: userId 
     };
     
-    console.log('📦 Request body:', requestBody);
 
     // Agregar timeout al request
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('⏰ Send message timeout');
       controller.abort();
     }, 10000); // 10 segundos de timeout
 
@@ -1327,17 +1310,13 @@ export const sendChatMessage = async (token: string, message: string, userId: st
 
     clearTimeout(timeoutId);
 
-    console.log('📡 Response status:', response.status);
-    console.log('📡 Response OK:', response.ok);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log('❌ Error response text:', errorText);
       throw new Error(`Send message failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('🔍 Chat service response data:', data);
     
     const result = {
       success: true,
@@ -1350,7 +1329,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
       fallbackMode: false
     };
     
-    console.log('✅ Returning result:', result);
     return result;
   } catch (error) {
     console.error('❌ Send message error:', error);
@@ -1361,7 +1339,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
          error.message.includes('Network request failed') ||
          error.message.includes('fetch'))) {
       
-      console.log('🔄 Switching to fallback mode due to network error');
       return await sendChatMessage(token, message, userId, true);
     }
     
@@ -1421,7 +1398,6 @@ export const initializeChatService = async (userToken: string) => {
       };
     }
 
-    console.log('✅ Chat Service inicializado');
     return { success: true, fallbackMode: false };
   } catch (error) {
     console.error('❌ Error inicializando chat service:', error);

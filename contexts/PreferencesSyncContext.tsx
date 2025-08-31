@@ -31,7 +31,6 @@ export const PreferencesSyncProvider: React.FC<PreferencesSyncProviderProps> = (
   const refreshFavorites = useCallback(async () => {
     // Solo ejecutar si está autenticado
     if (!isAuthenticated) {
-      console.log('Usuario no autenticado, limpiando favoritos');
       setUserFavorites([]);
       return;
     }
@@ -47,7 +46,6 @@ export const PreferencesSyncProvider: React.FC<PreferencesSyncProviderProps> = (
 
       const favoritesResponse = await getUserFavorites(token);
       const favorites = favoritesResponse.favorites?.favoriteStocks || [];
-      console.log('📋 Favoritos actualizados:', favorites);
       setUserFavorites(favorites);
     } catch (error) {
       console.error('Error refreshing favorites:', error);
@@ -60,7 +58,6 @@ export const PreferencesSyncProvider: React.FC<PreferencesSyncProviderProps> = (
   // Cargar favoritos automáticamente cuando el usuario se autentica
   useEffect(() => {
     if (isAuthenticated) {
-      console.log('✅ Usuario autenticado, cargando favoritos...');
       refreshFavorites();
     }
   }, [isAuthenticated, refreshFavorites]);

@@ -29,14 +29,10 @@ export default function LoginScreen() {
   const loadSavedCredentials = useCallback(async () => {
     try {
       const savedCredentials = await getSavedCredentials();
-      console.log('Saved credentials loaded:', savedCredentials);
       if (savedCredentials) {
         setEmail(savedCredentials.email);
         setPassword(savedCredentials.password);
         setRememberCredentials(true);
-        console.log('Credentials loaded and set');
-      } else {
-        console.log('No saved credentials found');
       }
     } catch (error) {
       console.error('Error loading saved credentials:', error);
@@ -53,8 +49,6 @@ export default function LoginScreen() {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
-    
-    console.log('Login attempt with remember credentials:', rememberCredentials);
     
     try {
       setIsLoading(true);

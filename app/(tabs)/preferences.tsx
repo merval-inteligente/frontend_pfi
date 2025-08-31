@@ -9,14 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 interface StockItem {
@@ -69,21 +69,15 @@ export default function PreferencesScreen() {
   useEffect(() => {
     const loadData = async () => {
       // Prevenir llamadas duplicadas usando ref
-      if (isLoadingRef.current) {
-        console.log('🔄 Ya se están cargando datos, saltando...');
-        return;
-      }
-
-      try {
+        if (isLoadingRef.current) {
+          return;
+        }      try {
         isLoadingRef.current = true;
         setLoading(true);
         setError(null);
 
-        console.log('🔍 Estado de autenticación:', isAuthenticated);
-
         if (isAuthenticated) {
           // Usuario autenticado: cargar desde backend
-          console.log('✅ Usuario autenticado, cargando desde backend...');
           
           // Obtener token almacenado
           const token = await getStoredToken();
@@ -104,15 +98,9 @@ export default function PreferencesScreen() {
             })
           ]);
 
-          console.log('📊 Respuesta sectores:', sectorsResponse);
-          console.log('📈 Respuesta stocks:', stocksResponse);
-          console.log('⭐ Respuesta favoritos:', favoritesResponse);
-
           // Extraer lista de símbolos favoritos - la estructura real es favorites.favoriteStocks
           const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
           updateFavorites(userFavoritesSymbols);
-
-          console.log('🔍 Símbolos favoritos extraídos:', userFavoritesSymbols);
 
           // Primero mapear los stocks para poder calcular qué sectores están en uso
           const stocksData = stocksResponse.stocks.map((stock: any) => ({
@@ -129,8 +117,6 @@ export default function PreferencesScreen() {
               .map((stock: StockItem) => stock.sector)
           );
 
-          console.log('🎯 Sectores con favoritos:', Array.from(sectorsWithFavorites));
-
           // Transformar los datos del backend al formato esperado por la UI
           const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
             name: sector.name,
@@ -138,14 +124,10 @@ export default function PreferencesScreen() {
             count: sector.count || 0
           }));
 
-          console.log('✅ Datos transformados - Sectores:', sectorsData.length);
-          console.log('✅ Datos transformados - Stocks:', stocksData.length);
-
           setSectors(sectorsData);
           setStocks(stocksData);
         } else {
           // Usuario no autenticado: mostrar mensaje de que necesita autenticarse
-          console.log('❌ Usuario no autenticado, se requiere autenticación para ver preferencias');
           throw new Error('Se requiere autenticación para ver las preferencias');
         }
       } catch (error) {

@@ -49,10 +49,8 @@ export default function ForgotPasswordScreen() {
 
     try {
       setIsLoading(true);
-      console.log('🚀 Enviando email de recuperación...');
 
       const response = await requestPasswordReset(email);
-      console.log('✅ Email enviado exitosamente:', response);
 
       Alert.alert(
         'Email enviado',
@@ -93,10 +91,8 @@ export default function ForgotPasswordScreen() {
 
     try {
       setIsLoading(true);
-      console.log('🔐 Verificando código...');
 
       const response = await verifyResetCode(email, verificationCode);
-      console.log('✅ Código verificado exitosamente:', response);
 
       Alert.alert(
         'Código verificado',
@@ -155,10 +151,8 @@ export default function ForgotPasswordScreen() {
 
     try {
       setIsLoading(true);
-      console.log('🔒 Cambiando contraseña...');
 
       const response = await resetPassword(email, verificationCode, newPassword);
-      console.log('✅ Contraseña cambiada exitosamente:', response);
 
       Alert.alert(
         'Contraseña actualizada',

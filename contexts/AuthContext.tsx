@@ -81,7 +81,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                                 (errorMessage.includes('Token inválido') && !errorMessage.includes('JSON'));
           
           if (isRealAuthError) {
-            console.log('Token inválido o expirado, limpiando sesión');
             await AsyncStorage.removeItem(USER_STORAGE_KEY);
             await AsyncStorage.removeItem('@auth_token');
             setUser(null);
@@ -118,9 +117,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const saveCredentials = async (email: string, password: string) => {
     try {
-      console.log('Attempting to save credentials for:', email);
       await AsyncStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify({ email, password }));
-      console.log('Credentials saved successfully');
     } catch (error) {
       console.error('Error saving credentials:', error);
     }
@@ -128,10 +125,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const getSavedCredentials = async (): Promise<{email: string; password: string} | null> => {
     try {
-      console.log('Attempting to get saved credentials');
       const saved = await AsyncStorage.getItem(CREDENTIALS_STORAGE_KEY);
       const result = saved ? JSON.parse(saved) : null;
-      console.log('Retrieved credentials:', result ? 'Found' : 'Not found');
       return result;
     } catch (error) {
       console.error('Error getting saved credentials:', error);
@@ -150,7 +145,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (email: string, password: string, rememberCredentials: boolean = false) => {
     try {
       setIsLoading(true);
-      console.log('Login called with rememberCredentials:', rememberCredentials);
       
       // Usar la función signIn del backend real
       const response = await signIn({ email, password });
@@ -183,10 +177,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await saveUserSession(adaptedUser);
         
         if (rememberCredentials) {
-          console.log('Saving credentials for:', email);
           await saveCredentials(email, password);
         } else {
-          console.log('Clearing saved credentials');
           await clearSavedCredentials();
         }
       } else {
@@ -204,18 +196,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setIsLoading(true);
       
-      // Usar la función signUp del backend real
-      const response = await signUp({
+      
+      // Validaciones básicas antes de enviar
+      if (!email || !password || !name) {
+        throw new Error('Todos los campos son requeridos');
+      }
+      
+      if (password.length < 6) {
+        throw new Error('La contraseña debe tener al menos 6 caracteres');
+      }
+      
+      // Validar que el nombre solo contenga letras y espacios
+      const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      if (!nameRegex.test(name)) {
+        throw new Error('El nombre solo puede contener letras y espacios');
+      }
+      
+      // Validar email básico
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('Por favor ingresa un email válido');
+      }
+      
+      const requestData = {
         email,
         password,
         name,
         acceptTerms: true // Siempre true cuando llega aquí
-      });
+      };
+      
+      // Usar la función signUp del backend real
+      const response = await signUp(requestData);
 
       // El backend devuelve: { success: true, message: "...", data: { user: {...}, token: "..." } }
       if (response.success && response.data) {
         const userData = response.data.user;
         const token = response.data.token;
+        
         
         // Guardar token JWT
         await AsyncStorage.setItem('@auth_token', token);

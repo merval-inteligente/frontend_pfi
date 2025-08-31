@@ -219,11 +219,9 @@ export default function HomeScreen() {
   // Cargar datos inicial cuando el usuario esté autenticado  
   useEffect(() => {
     if (isAuthenticated && user) {
-      console.log('🔄 Cargando datos iniciales para usuario autenticado');
       loadData();
     } else if (!isAuthenticated) {
       // Limpiar datos cuando no esté autenticado
-      console.log('🧹 Limpiando datos - usuario no autenticado');
       setUserStocks([]);
       setNews([]);
     }
@@ -234,7 +232,6 @@ export default function HomeScreen() {
     if (isAuthenticated && userFavorites && userFavorites.length > 0) {
       const reloadStockData = async () => {
         try {
-          console.log('🔄 Recargando stocks para favoritos:', userFavorites);
           
           // Intentar cargar desde backend primero
           const token = await getStoredToken();
@@ -268,7 +265,6 @@ export default function HomeScreen() {
       };
       reloadStockData();
     } else if (userFavorites && userFavorites.length === 0) {
-      console.log('📭 No hay favoritos, limpiando stocks');
       setUserStocks([]);
     }
   }, [userFavorites, isAuthenticated]);
@@ -276,7 +272,6 @@ export default function HomeScreen() {
   // Refrescar favoritos cuando la pantalla recibe foco
   useFocusEffect(
     useCallback(() => {
-      console.log('🎯 Pantalla enfocada - refrescando favoritos');
       refreshFavorites().catch(error => {
         console.error('Error refreshing favorites on focus:', error);
       });

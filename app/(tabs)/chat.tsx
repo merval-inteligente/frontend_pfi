@@ -35,18 +35,14 @@ export default function ChatScreen() {
 
   useEffect(() => {
     const initializeChatApp = async () => {
-      console.log('🚀 Initializing chat app...');
       
       try {
         // Obtener datos del usuario y JWT token
         const userSession = await AsyncStorage.getItem('@user_session');
         const jwtToken = await AsyncStorage.getItem('@auth_token');
         
-        console.log('📱 User session:', userSession ? 'EXISTS' : 'NULL');
-        console.log('🔐 JWT token:', jwtToken ? 'EXISTS' : 'NULL');
 
         if (!userSession || !jwtToken) {
-          console.log('❌ No user session or JWT token found');
           const errorMessage: ChatMessage = {
             id: 'error_' + Date.now().toString(),
             text: 'Por favor, inicia sesión para usar el chat.',
@@ -64,7 +60,6 @@ export default function ChatScreen() {
         try {
           user = JSON.parse(userSession);
         } catch (error) {
-          console.log('❌ Error parsing user session:', error);
           const errorMessage: ChatMessage = {
             id: 'error_' + Date.now().toString(),
             text: 'Error en los datos de usuario. Por favor, inicia sesión nuevamente.',
@@ -78,32 +73,25 @@ export default function ChatScreen() {
         // Obtener el userId del usuario autenticado
         const currentUserId = user.id;
         
-        console.log('👤 User data:', { name: user.name, id: currentUserId });
 
         // Inicializar Chat Service
-        console.log('🔧 Initializing chat service...');
         const initResult = await initializeChatService(token);
-        console.log('🔧 Init result:', initResult);
         
         if (!initResult.success) {
           throw new Error(initResult.warning || 'Error al inicializar chat service');
         }
 
         // Verificar autenticación
-        console.log('🔐 Verifying chat auth...');
         const authResult = await verifyChatAuth(token);
-        console.log('🔐 Auth result:', authResult);
         
         if (!authResult.success) {
           throw new Error(authResult.error || 'Error de autenticación');
         }
 
         // Guardar tokens y userId en el estado
-        console.log('💾 Setting token and userId in state');
         setUserToken(token);
         setUserId(currentUserId);
 
-        console.log('✅ Chat inicializado con JWT real para usuario:', user.name);
         
         // Cargar historial de chat
         const historyMessages = await loadChatHistory(token, currentUserId);
@@ -118,15 +106,12 @@ export default function ChatScreen() {
         
         // Establecer mensajes: historial + mensaje de bienvenida
         if (historyMessages.length > 0) {
-          console.log('📚 Setting messages with history +', historyMessages.length, 'previous messages');
           setMessages([...historyMessages, welcomeMessage]);
         } else {
-          console.log('📚 No history, setting only welcome message');
           setMessages([welcomeMessage]);
         }
         
       } catch (error) {
-        console.log('⚠️ Error inicializando chat, funcionalidad limitada:', error);
         // Agregar mensaje de error técnico
         const errorMessage: ChatMessage = {
           id: 'error_' + Date.now().toString(),
@@ -156,11 +141,9 @@ export default function ChatScreen() {
   // Función para cargar historial de chat
   const loadChatHistory = async (token: string, userId: string) => {
     try {
-      console.log('📚 Loading chat history for user:', userId);
       const historyResult = await getChatHistory(token, userId, 10); // Últimos 10 mensajes
       
       if (historyResult.success && historyResult.messages && historyResult.messages.length > 0) {
-        console.log('✅ Chat history loaded:', historyResult.messages.length, 'messages');
         
         // Convertir mensajes del historial al formato del chat
         const historyMessages: ChatMessage[] = historyResult.messages.map((msg: any, index: number) => {
@@ -187,27 +170,15 @@ export default function ChatScreen() {
         
         return historyMessages;
       } else {
-        console.log('📚 No previous chat history found or failed to load');
         return [];
       }
     } catch (error) {
-      console.log('⚠️ Error loading chat history:', error);
       return [];
     }
   };
 
   const handleSendMessage = async () => {
-    console.log('🚀 handleSendMessage called');
-    console.log('🔍 userToken:', userToken ? 'EXISTS' : 'NULL');
-    console.log('🔍 userId:', userId ? 'EXISTS' : 'NULL');
-    console.log('🔍 message:', message.trim());
-    
     if (!message.trim() || !userToken || !userId) {
-      console.log('❌ Validation failed:', { 
-        hasMessage: !!message.trim(), 
-        hasToken: !!userToken, 
-        hasUserId: !!userId 
-      });
       return;
     }
 
@@ -219,23 +190,14 @@ export default function ChatScreen() {
       timestamp: new Date()
     };
 
-    console.log('✅ Adding user message to UI');
     setMessages(prev => [...prev, userMessage]);
     setMessage('');
     setIsTyping(true);
 
     try {
-      console.log('📡 Calling sendChatMessage with:', { 
-        hasToken: !!userToken, 
-        messageLength: messageText.length, 
-        userId 
-      });
-      
       const response = await sendChatMessage(userToken, messageText, userId);
-      console.log('🔍 Frontend - Chat response:', response);
       
       if (response.success && response.assistantResponse) {
-        console.log('✅ Frontend - Using AI response');
         const botMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           text: response.assistantResponse,
@@ -249,12 +211,10 @@ export default function ChatScreen() {
         }, 800);
       } else {
         // Error en la respuesta del servicio
-        console.log('❌ Response not successful or missing assistantResponse:', response);
         throw new Error('No se pudo obtener respuesta del chat service');
       }
 
     } catch (error) {
-      console.log('❌ Frontend - Chat error:', error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: 'Lo siento, no puedo responder en este momento. Por favor, intenta más tarde.',

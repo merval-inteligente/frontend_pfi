@@ -8,6 +8,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -39,7 +41,18 @@ export default function RegisterScreen() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [availableSectors, setAvailableSectors] = useState<string[]>([]);
+  const [availableSectors, setAvailableSectors] = useState<string[]>([
+    'Alimentos', 
+    'Bancos', 
+    'Construcción', 
+    'Energía', 
+    'Holding', 
+    'Metalurgia', 
+    'Otros', 
+    'Petróleo y Gas', 
+    'Siderurgia', 
+    'Telecomunicaciones'
+  ]);
   const [loadingSectors, setLoadingSectors] = useState(false);
 
   // Efecto para cargar sectores cuando se llega a la pantalla de sectores
@@ -104,27 +117,84 @@ export default function RegisterScreen() {
 
   const completeRegistration = async () => {
     try {
+      // Validar datos del formulario antes de enviar
+      
+      // Validaciones del lado del cliente
+      if (!formData.email || !formData.password || !formData.name) {
+        Alert.alert('Error', 'Todos los campos son requeridos');
+        return;
+      }
+      
+      if (formData.password !== formData.confirmPassword) {
+        Alert.alert('Error', 'Las contraseñas no coinciden');
+        return;
+      }
+      
+      if (formData.password.length < 6) {
+        Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+      
+      // Validar que el nombre solo contenga letras y espacios
+      const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      if (!nameRegex.test(formData.name)) {
+        Alert.alert('Error', 'El nombre solo puede contener letras y espacios');
+        return;
+      }
+      
+      // Validar email básico
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        Alert.alert('Error', 'Por favor ingresa un email válido');
+        return;
+      }
+      
       // Primero registrar el usuario
       await register(formData.email, formData.password, formData.name);
+      
+      // Esperar un momento para que el backend procese completamente el usuario
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+      
+      // Intentar actualizar la lista de sectores con el nuevo token
+      await loadAvailableSectors();
       
       // Obtener el token del usuario recién registrado
       const token = await AsyncStorage.getItem('@auth_token');
       
       if (token && onboardingData.sectors.length > 0) {
         // Guardar las preferencias de sectores seleccionadas
-        console.log('💾 Guardando preferencias del onboarding...');
         
-        try {
-          // Agregar cada sector seleccionado como favorito
-          const sectorPromises = onboardingData.sectors.map(sectorName => 
-            addSectorToFavorites(sectorName, token)
-          );
-          
-          await Promise.all(sectorPromises);
-          console.log('✅ Preferencias guardadas exitosamente');
-        } catch (preferencesError) {
-          console.error('⚠️ Error guardando preferencias:', preferencesError);
-          // No bloquear el flujo si hay error guardando preferencias
+        // Filtrar sectores válidos (que existen en la lista disponible)
+        const validSectors = onboardingData.sectors.filter(sector => 
+          availableSectors.includes(sector)
+        );
+        const invalidSectors = onboardingData.sectors.filter(sector => 
+          !availableSectors.includes(sector)
+        );
+        
+        if (invalidSectors.length > 0) {
+          console.warn('⚠️ Sectores inválidos detectados:', invalidSectors);
+        }
+        
+        
+        if (validSectors.length === 0) {
+          console.warn('⚠️ No hay sectores válidos para agregar');
+        } else {
+          try {
+            // Intentar agregar cada sector válido con reintentos
+            for (const sectorName of validSectors) {
+              await addSectorWithRetry(sectorName, token);
+            }
+            
+          } catch (preferencesError) {
+            console.error('⚠️ Error guardando preferencias:', preferencesError);
+            // Mostrar warning pero no bloquear el flujo
+            Alert.alert(
+              'Atención',
+              'Tu cuenta fue creada exitosamente, pero hubo un problema guardando tus preferencias. Puedes configurarlas más tarde en la pantalla de Preferencias.',
+              [{ text: 'Entendido' }]
+            );
+          }
         }
       }
       
@@ -135,6 +205,27 @@ export default function RegisterScreen() {
       );
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Hubo un problema al completar el registro');
+    }
+  };
+
+  // Función auxiliar para agregar sector con reintentos
+  const addSectorWithRetry = async (sectorName: string, token: string, maxRetries: number = 3) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await addSectorToFavorites(sectorName, token);
+        return; // Éxito, salir de la función
+      } catch (error) {
+        console.error(`❌ Error intento ${attempt}/${maxRetries} para ${sectorName}:`, error);
+        
+        if (attempt === maxRetries) {
+          // Último intento fallido, re-lanzar el error
+          throw new Error(`No se pudo agregar el sector ${sectorName} después de ${maxRetries} intentos`);
+        }
+        
+        // Esperar antes del siguiente intento (backoff exponencial)
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   };
 
@@ -150,19 +241,49 @@ export default function RegisterScreen() {
   const loadAvailableSectors = async () => {
     try {
       setLoadingSectors(true);
-      const token = await AsyncStorage.getItem('@auth_token');
+      
+      // Primero intentar con el token (si existe)
+      let token = await AsyncStorage.getItem('@auth_token');
       
       if (token) {
         const sectorsResponse = await getSectors(token);
+        
         if (sectorsResponse.sectors) {
           const sectorNames = sectorsResponse.sectors.map((sector: any) => sector.name);
           setAvailableSectors(sectorNames);
+          return; // Salir si obtuvo los sectores del backend
         }
       }
+      
+      // Si no hay token o no se pudieron obtener, usar sectores por defecto
+      setAvailableSectors([
+        'Alimentos', 
+        'Bancos', 
+        'Construcción', 
+        'Energía', 
+        'Holding', 
+        'Metalurgia', 
+        'Otros', 
+        'Petróleo y Gas', 
+        'Siderurgia', 
+        'Telecomunicaciones'
+      ]);
+      
     } catch (error) {
       console.error('Error cargando sectores:', error);
-      // Usar sectores por defecto si hay error
-      setAvailableSectors(['Tecnología', 'Energía', 'Finanzas', 'Bienes de Consumo', 'Salud']);
+      // Usar sectores reales del backend como fallback
+      setAvailableSectors([
+        'Alimentos', 
+        'Bancos', 
+        'Construcción', 
+        'Energía', 
+        'Holding', 
+        'Metalurgia', 
+        'Otros', 
+        'Petróleo y Gas', 
+        'Siderurgia', 
+        'Telecomunicaciones'
+      ]);
     } finally {
       setLoadingSectors(false);
     }
@@ -199,7 +320,21 @@ export default function RegisterScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>Crear Cuenta</Text>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView 
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 120 : 0}
+        >
+          <ScrollView 
+            style={styles.scrollView} 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+            automaticallyAdjustContentInsets={false}
+            nestedScrollEnabled={true}
+            overScrollMode="never"
+          >
           <View style={styles.welcomeContainer}>
             <Text style={[styles.welcome, { color: colors.text }]}>
               ¡Únete a MERVAL!
@@ -224,6 +359,9 @@ export default function RegisterScreen() {
                 onChangeText={(value) => updateFormData('name', value)}
                 autoCapitalize="words"
               />
+              <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                Solo se permiten letras y espacios
+              </Text>
             </View>
 
             <View style={styles.inputContainer}>
@@ -320,6 +458,7 @@ export default function RegisterScreen() {
             </Text>
           </View>
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -514,7 +653,12 @@ export default function RegisterScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>Sectores de Interés</Text>
         </View>
 
-        <View style={styles.onboardingContent}>
+        <ScrollView 
+          style={styles.onboardingContent}
+          contentContainerStyle={styles.onboardingScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.onboardingMain}>
             <Text style={[styles.onboardingTitle, { color: colors.text }]}>
               Selecciona tus sectores de interés
@@ -579,7 +723,7 @@ export default function RegisterScreen() {
               {getProgressDots()}
             </View>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -590,6 +734,21 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  flex1: {
+    flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 100,
+    minHeight: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -613,7 +772,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
   },
   welcomeContainer: {
     marginBottom: 32,
@@ -644,6 +802,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 16,
+  },
+  helpText: {
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   passwordContainer: {
     height: 56,
@@ -695,10 +858,13 @@ const styles = StyleSheet.create({
   // Estilos para onboarding
   onboardingContent: {
     flex: 1,
+  },
+  onboardingScrollContent: {
+    flexGrow: 1,
     justifyContent: 'space-between',
+    paddingBottom: 20,
   },
   onboardingMain: {
-    flex: 1,
     paddingHorizontal: 24,
     paddingTop: 20,
   },
