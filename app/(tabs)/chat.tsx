@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getChatHistory, initializeChatService, sendChatMessage, verifyChatAuth } from '@/controller/apiController';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
@@ -14,7 +15,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import chatService from '../../services/ChatService';
 
 interface ChatMessage {
   id: string;
@@ -29,10 +29,116 @@ export default function ChatScreen() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [userToken, setUserToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    initializeChatService();
+    const initializeChatApp = async () => {
+      console.log('🚀 Initializing chat app...');
+      
+      try {
+        // Obtener datos del usuario y JWT token
+        const userSession = await AsyncStorage.getItem('@user_session');
+        const jwtToken = await AsyncStorage.getItem('@auth_token');
+        
+        console.log('📱 User session:', userSession ? 'EXISTS' : 'NULL');
+        console.log('🔐 JWT token:', jwtToken ? 'EXISTS' : 'NULL');
+
+        if (!userSession || !jwtToken) {
+          console.log('❌ No user session or JWT token found');
+          const errorMessage: ChatMessage = {
+            id: 'error_' + Date.now().toString(),
+            text: 'Por favor, inicia sesión para usar el chat.',
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setMessages([errorMessage]);
+          return;
+        }
+
+        const token = jwtToken;
+
+        // Parse user session para obtener el user object
+        let user;
+        try {
+          user = JSON.parse(userSession);
+        } catch (error) {
+          console.log('❌ Error parsing user session:', error);
+          const errorMessage: ChatMessage = {
+            id: 'error_' + Date.now().toString(),
+            text: 'Error en los datos de usuario. Por favor, inicia sesión nuevamente.',
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setMessages([errorMessage]);
+          return;
+        }
+
+        // Obtener el userId del usuario autenticado
+        const currentUserId = user.id;
+        
+        console.log('👤 User data:', { name: user.name, id: currentUserId });
+
+        // Inicializar Chat Service
+        console.log('🔧 Initializing chat service...');
+        const initResult = await initializeChatService(token);
+        console.log('🔧 Init result:', initResult);
+        
+        if (!initResult.success) {
+          throw new Error(initResult.warning || 'Error al inicializar chat service');
+        }
+
+        // Verificar autenticación
+        console.log('🔐 Verifying chat auth...');
+        const authResult = await verifyChatAuth(token);
+        console.log('🔐 Auth result:', authResult);
+        
+        if (!authResult.success) {
+          throw new Error(authResult.error || 'Error de autenticación');
+        }
+
+        // Guardar tokens y userId en el estado
+        console.log('💾 Setting token and userId in state');
+        setUserToken(token);
+        setUserId(currentUserId);
+
+        console.log('✅ Chat inicializado con JWT real para usuario:', user.name);
+        
+        // Cargar historial de chat
+        const historyMessages = await loadChatHistory(token, currentUserId);
+        
+        // Agregar mensaje de bienvenida
+        const welcomeMessage: ChatMessage = {
+          id: 'welcome_' + Date.now().toString(),
+          text: `¡Hola ${user.name}! 👋 Soy tu asistente financiero argentino. Puedo ayudarte con análisis del MERVAL, información de acciones, bonos, dólar y criptomonedas. ¿En qué puedo ayudarte hoy?`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        
+        // Establecer mensajes: historial + mensaje de bienvenida
+        if (historyMessages.length > 0) {
+          console.log('📚 Setting messages with history +', historyMessages.length, 'previous messages');
+          setMessages([...historyMessages, welcomeMessage]);
+        } else {
+          console.log('📚 No history, setting only welcome message');
+          setMessages([welcomeMessage]);
+        }
+        
+      } catch (error) {
+        console.log('⚠️ Error inicializando chat, funcionalidad limitada:', error);
+        // Agregar mensaje de error técnico
+        const errorMessage: ChatMessage = {
+          id: 'error_' + Date.now().toString(),
+          text: 'Hay un problema técnico con el chat. Por favor, intenta más tarde.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages([errorMessage]);
+      }
+    };
+
+    initializeChatApp();
   }, []);
 
   useEffect(() => {
@@ -47,57 +153,63 @@ export default function ChatScreen() {
     }, 100);
   };
 
-  const initializeChatService = async () => {
+  // Función para cargar historial de chat
+  const loadChatHistory = async (token: string, userId: string) => {
     try {
-      // Obtener el JWT real del backend desde AsyncStorage
-      let userToken = await AsyncStorage.getItem('@auth_token');
-      let userSession = await AsyncStorage.getItem('@user_session');
+      console.log('📚 Loading chat history for user:', userId);
+      const historyResult = await getChatHistory(token, userId, 10); // Últimos 10 mensajes
       
-      if (!userToken || !userSession) {
-        console.log('⚠️ No hay sesión de usuario, el chat no funcionará');
-        // Agregar mensaje de error para el usuario
-        const errorMessage: ChatMessage = {
-          id: 'error_' + Date.now().toString(),
-          text: 'Para usar el chat, necesitas iniciar sesión primero.',
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setMessages([errorMessage]);
-        return;
+      if (historyResult.success && historyResult.messages && historyResult.messages.length > 0) {
+        console.log('✅ Chat history loaded:', historyResult.messages.length, 'messages');
+        
+        // Convertir mensajes del historial al formato del chat
+        const historyMessages: ChatMessage[] = historyResult.messages.map((msg: any, index: number) => {
+          const messages = [];
+          
+          // Mensaje del usuario
+          messages.push({
+            id: `history_user_${msg.message_id || index}_${Date.now()}`,
+            text: msg.message,
+            sender: 'user' as const,
+            timestamp: new Date(msg.timestamp)
+          });
+          
+          // Respuesta del bot
+          messages.push({
+            id: `history_bot_${msg.message_id || index}_${Date.now()}`,
+            text: msg.response,
+            sender: 'bot' as const,
+            timestamp: new Date(msg.timestamp)
+          });
+          
+          return messages;
+        }).flat();
+        
+        return historyMessages;
+      } else {
+        console.log('📚 No previous chat history found or failed to load');
+        return [];
       }
-
-      // Obtener el userId del usuario autenticado
-      const user = JSON.parse(userSession);
-      const userId = user.id;
-
-      await chatService.initialize(userToken);
-      await chatService.authenticate(userId);
-      console.log('✅ Chat inicializado con JWT real para usuario:', user.name);
-      
-      // Agregar mensaje de bienvenida
-      const welcomeMessage: ChatMessage = {
-        id: 'welcome_' + Date.now().toString(),
-        text: `¡Hola ${user.name}! 👋 Soy tu asistente financiero argentino. Puedo ayudarte con análisis del MERVAL, información de acciones, bonos, dólar y criptomonedas. ¿En qué puedo ayudarte hoy?`,
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      setMessages([welcomeMessage]);
-      
-    } catch {
-      console.log('⚠️ Error inicializando chat, funcionalidad limitada');
-      // Agregar mensaje de error técnico
-      const errorMessage: ChatMessage = {
-        id: 'error_' + Date.now().toString(),
-        text: 'Hay un problema técnico con el chat. Por favor, intenta más tarde.',
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      setMessages([errorMessage]);
+    } catch (error) {
+      console.log('⚠️ Error loading chat history:', error);
+      return [];
     }
   };
 
   const handleSendMessage = async () => {
-    if (!message.trim()) return;
+    console.log('🚀 handleSendMessage called');
+    console.log('🔍 userToken:', userToken ? 'EXISTS' : 'NULL');
+    console.log('🔍 userId:', userId ? 'EXISTS' : 'NULL');
+    console.log('🔍 message:', message.trim());
+    
+    if (!message.trim() || !userToken || !userId) {
+      console.log('❌ Validation failed:', { 
+        hasMessage: !!message.trim(), 
+        hasToken: !!userToken, 
+        hasUserId: !!userId 
+      });
+      return;
+    }
 
     const messageText = message.trim();
     const userMessage: ChatMessage = {
@@ -107,12 +219,19 @@ export default function ChatScreen() {
       timestamp: new Date()
     };
 
+    console.log('✅ Adding user message to UI');
     setMessages(prev => [...prev, userMessage]);
     setMessage('');
     setIsTyping(true);
 
     try {
-      const response = await chatService.sendMessage(messageText);
+      console.log('📡 Calling sendChatMessage with:', { 
+        hasToken: !!userToken, 
+        messageLength: messageText.length, 
+        userId 
+      });
+      
+      const response = await sendChatMessage(userToken, messageText, userId);
       console.log('🔍 Frontend - Chat response:', response);
       
       if (response.success && response.assistantResponse) {
@@ -130,6 +249,7 @@ export default function ChatScreen() {
         }, 800);
       } else {
         // Error en la respuesta del servicio
+        console.log('❌ Response not successful or missing assistantResponse:', response);
         throw new Error('No se pudo obtener respuesta del chat service');
       }
 

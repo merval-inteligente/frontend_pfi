@@ -1,18 +1,20 @@
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { addSectorToFavorites, getSectors } from '@/controller/apiController';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 type OnboardingStep = 'register' | 'knowledge' | 'risk' | 'sectors' | 'welcome';
@@ -37,6 +39,15 @@ export default function RegisterScreen() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [availableSectors, setAvailableSectors] = useState<string[]>([]);
+  const [loadingSectors, setLoadingSectors] = useState(false);
+
+  // Efecto para cargar sectores cuando se llega a la pantalla de sectores
+  React.useEffect(() => {
+    if (currentStep === 'sectors') {
+      loadAvailableSectors();
+    }
+  }, [currentStep]);
 
   const handleRegister = () => {
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
@@ -93,7 +104,30 @@ export default function RegisterScreen() {
 
   const completeRegistration = async () => {
     try {
+      // Primero registrar el usuario
       await register(formData.email, formData.password, formData.name);
+      
+      // Obtener el token del usuario recién registrado
+      const token = await AsyncStorage.getItem('@auth_token');
+      
+      if (token && onboardingData.sectors.length > 0) {
+        // Guardar las preferencias de sectores seleccionadas
+        console.log('💾 Guardando preferencias del onboarding...');
+        
+        try {
+          // Agregar cada sector seleccionado como favorito
+          const sectorPromises = onboardingData.sectors.map(sectorName => 
+            addSectorToFavorites(sectorName, token)
+          );
+          
+          await Promise.all(sectorPromises);
+          console.log('✅ Preferencias guardadas exitosamente');
+        } catch (preferencesError) {
+          console.error('⚠️ Error guardando preferencias:', preferencesError);
+          // No bloquear el flujo si hay error guardando preferencias
+        }
+      }
+      
       Alert.alert(
         'Registro completado',
         `¡Bienvenido ${formData.name}! Tu perfil ha sido configurado exitosamente.`,
@@ -110,6 +144,28 @@ export default function RegisterScreen() {
 
   const updateOnboardingData = (field: string, value: string | string[]) => {
     setOnboardingData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Función para cargar sectores desde el backend
+  const loadAvailableSectors = async () => {
+    try {
+      setLoadingSectors(true);
+      const token = await AsyncStorage.getItem('@auth_token');
+      
+      if (token) {
+        const sectorsResponse = await getSectors(token);
+        if (sectorsResponse.sectors) {
+          const sectorNames = sectorsResponse.sectors.map((sector: any) => sector.name);
+          setAvailableSectors(sectorNames);
+        }
+      }
+    } catch (error) {
+      console.error('Error cargando sectores:', error);
+      // Usar sectores por defecto si hay error
+      setAvailableSectors(['Tecnología', 'Energía', 'Finanzas', 'Bienes de Consumo', 'Salud']);
+    } finally {
+      setLoadingSectors(false);
+    }
   };
 
   const getProgressDots = () => {
@@ -427,7 +483,7 @@ export default function RegisterScreen() {
 
   // Pantalla de sectores preferidos
   if (currentStep === 'sectors') {
-    const sectorOptions = [
+    const sectorOptions = availableSectors.length > 0 ? availableSectors : [
       'Tecnología',
       'Energía', 
       'Finanzas',
@@ -468,35 +524,44 @@ export default function RegisterScreen() {
             </Text>
             
             <View style={styles.sectorListContainer}>
-              {sectorOptions.map((sector) => {
-                const isSelected = onboardingData.sectors.includes(sector);
-                return (
-                  <TouchableOpacity
-                    key={sector}
-                    style={[
-                      styles.sectorItem, 
-                      { 
-                        backgroundColor: isSelected ? '#8CD279' : colors.card, 
-                        borderColor: isSelected ? '#8CD279' : colors.cardBorder,
-                        borderWidth: 2
-                      }
-                    ]}
-                    onPress={() => toggleSector(sector)}
-                  >
-                    <View style={styles.sectorContent}>
-                      <Text style={[
-                        styles.sectorText, 
-                        { color: isSelected ? '#131612' : colors.text }
-                      ]}>
-                        {sector}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={24} color="#131612" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              {loadingSectors ? (
+                <View style={styles.loadingContainer}>
+                  <Ionicons name="hourglass-outline" size={32} color={colors.subtitle} />
+                  <Text style={[styles.loadingText, { color: colors.subtitle }]}>
+                    Cargando sectores...
+                  </Text>
+                </View>
+              ) : (
+                sectorOptions.map((sector) => {
+                  const isSelected = onboardingData.sectors.includes(sector);
+                  return (
+                    <TouchableOpacity
+                      key={sector}
+                      style={[
+                        styles.sectorItem, 
+                        { 
+                          backgroundColor: isSelected ? '#8CD279' : colors.card, 
+                          borderColor: isSelected ? '#8CD279' : colors.cardBorder,
+                          borderWidth: 2
+                        }
+                      ]}
+                      onPress={() => toggleSector(sector)}
+                    >
+                      <View style={styles.sectorContent}>
+                        <Text style={[
+                          styles.sectorText, 
+                          { color: isSelected ? '#131612' : colors.text }
+                        ]}>
+                          {sector}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={24} color="#131612" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
             
             <TouchableOpacity 
@@ -738,5 +803,15 @@ const styles = StyleSheet.create({
   sectorText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
   },
 });

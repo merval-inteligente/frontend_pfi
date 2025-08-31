@@ -148,6 +148,277 @@ export const getProfile = async token => {
   }
 };
 
+export const requestPasswordReset = async (email: string) => {
+  let url = urlWebServices.requestPasswordReset;
+
+  console.log('🔗 URL completa:', url);
+  console.log('📧 Email a enviar:', email);
+  console.log('🌐 Verificando conectividad al servidor...');
+
+  try {
+    // Verificar conectividad básica primero
+    try {
+      const connectivityController = new AbortController();
+      const connectivityTimeoutId = setTimeout(() => connectivityController.abort(), 8000); // Aumentado a 8 segundos
+
+      const connectivityCheck = await fetch(urlWebServices.baseUrl, {
+        method: 'HEAD',
+        signal: connectivityController.signal
+      });
+
+      clearTimeout(connectivityTimeoutId);
+      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
+    } catch (connectivityError) {
+      console.log('❌ Servidor no reachable:', connectivityError);
+      throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
+    }
+
+    // Crear un controlador AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Timeout alcanzado, abortando solicitud');
+      controller.abort();
+    }, 10000); // 10 segundos de timeout (reducido para desarrollo)
+
+    console.log('📡 Enviando solicitud POST...');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+      }),
+      signal: controller.signal, // Agregar el signal para poder abortar
+    });
+
+    // Limpiar el timeout si la respuesta llegó a tiempo
+    clearTimeout(timeoutId);
+
+    console.log('📡 Status de respuesta:', response.status);
+    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
+
+      try {
+        const errorData = await response.json();
+        console.log('❌ Datos de error del servidor:', errorData);
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        console.log('❌ No se pudo parsear la respuesta de error');
+        // Intentar obtener el texto plano de la respuesta
+        try {
+          const errorText = await response.text();
+          console.log('❌ Texto de error:', errorText);
+        } catch (textError) {
+          console.log('❌ No se pudo obtener el texto de error');
+        }
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('✅ Datos de respuesta exitosa:', data);
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Error: Timeout - La solicitud tardó demasiado tiempo');
+      throw new Error('La solicitud tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
+    }
+
+    console.error('❌ Error en requestPasswordReset:', error);
+    throw error;
+  }
+};
+
+export const verifyResetCode = async (email: string, code: string) => {
+  let url = urlWebServices.verifyResetCode;
+
+  console.log('🔐 Verificando código de reset...');
+  console.log('🔗 URL completa:', url);
+  console.log('📧 Email:', email);
+  console.log('🔢 Código:', code);
+
+  try {
+    // Verificar conectividad básica primero
+    try {
+      const connectivityController = new AbortController();
+      const connectivityTimeoutId = setTimeout(() => connectivityController.abort(), 8000);
+
+      const connectivityCheck = await fetch(urlWebServices.baseUrl, {
+        method: 'HEAD',
+        signal: connectivityController.signal
+      });
+
+      clearTimeout(connectivityTimeoutId);
+      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
+    } catch (connectivityError) {
+      console.log('❌ Servidor no reachable:', connectivityError);
+      throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
+    }
+
+    // Crear un controlador AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Timeout alcanzado, abortando solicitud de verificación');
+      controller.abort();
+    }, 10000); // 10 segundos de timeout
+
+    console.log('📡 Enviando solicitud de verificación POST...');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        code: code,
+      }),
+      signal: controller.signal,
+    });
+
+    // Limpiar el timeout si la respuesta llegó a tiempo
+    clearTimeout(timeoutId);
+
+    console.log('📡 Status de respuesta:', response.status);
+    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
+
+      try {
+        const errorData = await response.json();
+        console.log('❌ Datos de error del servidor:', errorData);
+        
+        // Manejar errores específicos del backend
+        if (errorData.error === 'INVALID_CODE') {
+          errorMessage = 'El código es inválido o ha expirado. Solicita un nuevo código.';
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (parseError) {
+        console.log('❌ No se pudo parsear la respuesta de error');
+        try {
+          const errorText = await response.text();
+          console.log('❌ Texto de error:', errorText);
+        } catch (textError) {
+          console.log('❌ No se pudo obtener el texto de error');
+        }
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('✅ Código verificado exitosamente:', data);
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Error: Timeout - La verificación tardó demasiado tiempo');
+      throw new Error('La verificación tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
+    }
+
+    console.error('❌ Error en verifyResetCode:', error);
+    throw error;
+  }
+};
+
+export const resetPassword = async (email: string, code: string, newPassword: string) => {
+  let url = urlWebServices.resetPassword;
+
+  console.log('🔒 Cambiando contraseña...');
+  console.log('🔗 URL completa:', url);
+  console.log('📧 Email:', email);
+  console.log('🔢 Código:', code);
+  console.log('🔐 Nueva contraseña length:', newPassword.length);
+
+  try {
+    // Verificar conectividad básica primero
+    try {
+      const connectivityController = new AbortController();
+      const connectivityTimeoutId = setTimeout(() => connectivityController.abort(), 8000);
+
+      const connectivityCheck = await fetch(urlWebServices.baseUrl, {
+        method: 'HEAD',
+        signal: connectivityController.signal
+      });
+
+      clearTimeout(connectivityTimeoutId);
+      console.log('✅ Servidor reachable, status:', connectivityCheck.status);
+    } catch (connectivityError) {
+      console.log('❌ Servidor no reachable:', connectivityError);
+      throw new Error('No se puede conectar al servidor. Verifica que el servidor esté ejecutándose.');
+    }
+
+    // Crear un controlador AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Timeout alcanzado, abortando cambio de contraseña');
+      controller.abort();
+    }, 10000); // 10 segundos de timeout
+
+    console.log('📡 Enviando solicitud de cambio de contraseña POST...');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        code: code,
+        newPassword: newPassword,
+      }),
+      signal: controller.signal,
+    });
+
+    // Limpiar el timeout si la respuesta llegó a tiempo
+    clearTimeout(timeoutId);
+
+    console.log('📡 Status de respuesta:', response.status);
+    console.log('📡 Headers de respuesta:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      let errorMessage = `Error HTTP: ${response.status} ${response.statusText}`;
+
+      try {
+        const errorData = await response.json();
+        console.log('❌ Datos de error del servidor:', errorData);
+        
+        // Manejar errores específicos del backend
+        if (errorData.error === 'INVALID_CODE') {
+          errorMessage = 'El código es inválido o ha expirado. Solicita un nuevo código.';
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (parseError) {
+        console.log('❌ No se pudo parsear la respuesta de error');
+        try {
+          const errorText = await response.text();
+          console.log('❌ Texto de error:', errorText);
+        } catch (textError) {
+          console.log('❌ No se pudo obtener el texto de error');
+        }
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('✅ Contraseña cambiada exitosamente:', data);
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Error: Timeout - El cambio de contraseña tardó demasiado tiempo');
+      throw new Error('El cambio de contraseña tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
+    }
+
+    console.error('❌ Error en resetPassword:', error);
+    throw error;
+  }
+};
+
 export const updateProfile = async (profileData, token) => {
   let url = urlWebServices.updateProfile;
 
@@ -542,6 +813,32 @@ export const getUserFavorites = async (token: string) => {
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      // Manejo específico para error 429 (Too Many Requests)
+      if (response.status === 429) {
+        console.warn('⚠️ Rate limit alcanzado, reintentando en 2 segundos...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Reintentar una vez
+        const retryResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          return {
+            favorites: retryData.data.preferences || {},
+            message: retryData.message
+          };
+        } else {
+          throw new Error(`Rate limit persistente: ${retryResponse.status}`);
+        }
+      }
+      
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
@@ -654,7 +951,7 @@ export const addSectorToFavorites = async (sectorName: string, token: string) =>
  * @param {string} theme - "light", "dark" o "system"
  * @param {string} token - JWT token del usuario
  */
-export const updateTheme = async (theme, token) => {
+export const updateTheme = async (theme: string, token: string) => {
   return await patchUserPreferences({ theme }, token);
 };
 
@@ -663,7 +960,7 @@ export const updateTheme = async (theme, token) => {
  * @param {boolean} notifications - true o false
  * @param {string} token - JWT token del usuario
  */
-export const updateNotifications = async (notifications, token) => {
+export const updateNotifications = async (notifications: boolean, token: string) => {
   return await patchUserPreferences({ notifications }, token);
 };
 
@@ -673,7 +970,7 @@ export const updateNotifications = async (notifications, token) => {
  * @param {string} token - JWT token del usuario
  * @returns {Promise<boolean>} true si está en favoritos
  */
-export const isSymbolInFavorites = async (symbol, token) => {
+export const isSymbolInFavorites = async (symbol: string, token: string) => {
   try {
     const response = await getUserPreferences(token);
     const favoriteStocks = response.data.preferences.favoriteStocks || [];
@@ -689,7 +986,7 @@ export const isSymbolInFavorites = async (symbol, token) => {
  * @param {string} token - JWT token del usuario
  * @returns {Promise<string[]>} Array de símbolos favoritos
  */
-export const getFavoriteStocks = async (token) => {
+export const getFavoriteStocks = async (token: string) => {
   try {
     const response = await getUserPreferences(token);
     return response.data.preferences.favoriteStocks || [];
@@ -703,11 +1000,13 @@ export const getFavoriteStocks = async (token) => {
  * Clase helper para manejar todas las operaciones de preferencias
  */
 export class PreferencesAPI {
-  constructor(getToken) {
+  private getToken: () => Promise<string | null>;
+
+  constructor(getToken: () => Promise<string | null>) {
     this.getToken = getToken;
   }
 
-  async makeAuthenticatedRequest(apiFunction, ...args) {
+  async makeAuthenticatedRequest(apiFunction: Function, ...args: any[]): Promise<any> {
     const token = await this.getToken();
     if (!token) {
       throw new Error('No hay token de autenticación');
@@ -720,27 +1019,27 @@ export class PreferencesAPI {
     return this.makeAuthenticatedRequest(getUserPreferences);
   }
 
-  async updatePreferences(preferences) {
+  async updatePreferences(preferences: any) {
     return this.makeAuthenticatedRequest(updateUserPreferences, preferences);
   }
 
-  async patchPreferences(changes) {
+  async patchPreferences(changes: any) {
     return this.makeAuthenticatedRequest(patchUserPreferences, changes);
   }
 
-  async addFavorite(symbol) {
+  async addFavorite(symbol: string) {
     return this.makeAuthenticatedRequest(addToFavorites, symbol);
   }
 
-  async removeFavorite(symbol) {
+  async removeFavorite(symbol: string) {
     return this.makeAuthenticatedRequest(removeFromFavorites, symbol);
   }
 
-  async updateTheme(theme) {
+  async updateTheme(theme: string) {
     return this.makeAuthenticatedRequest(updateTheme, theme);
   }
 
-  async updateNotifications(notifications) {
+  async updateNotifications(notifications: boolean) {
     return this.makeAuthenticatedRequest(updateNotifications, notifications);
   }
 
@@ -748,13 +1047,16 @@ export class PreferencesAPI {
     return this.makeAuthenticatedRequest(getFavoriteStocks);
   }
 
-  async isInFavorites(symbol) {
+  async isInFavorites(symbol: string) {
     return this.makeAuthenticatedRequest(isSymbolInFavorites, symbol);
   }
 
   // Métodos sin autenticación
   async getValidSymbols() {
     const token = await this.getToken();
+    if (!token) {
+      throw new Error('No hay token de autenticación');
+    }
     return getValidSymbols(token);
   }
 
@@ -820,5 +1122,346 @@ export const removeFavoriteSector = async (token: string, sector: string): Promi
     console.error('❌ Error eliminando sector de favoritos:', error);
     throw error;
   }
+};
+
+// 💬 CHAT SERVICE FUNCTIONS
+
+/**
+ * Verificar el estado del Chat Service
+ */
+export const checkChatHealth = async () => {
+  const url = urlWebServices.chatHealth;
+  
+  console.log('🏥 Checking chat health at URL:', url);
+
+  try {
+    // Crear un controlador AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Chat health check timeout');
+      controller.abort();
+    }, 5000); // 5 segundos de timeout
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Limpiar el timeout si la respuesta llegó a tiempo
+    clearTimeout(timeoutId);
+    
+    console.log('🏥 Health check response status:', response.status);
+    console.log('🏥 Health check response OK:', response.ok);
+    
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('🏥 Health check data:', data);
+    
+    const result = {
+      success: true,
+      data: data,
+      backendConnected: data.services?.main_backend === 'connected'
+    };
+    
+    console.log('🏥 Health check result:', result);
+    return result;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Chat health check timeout - Chat service may not be running');
+      return { 
+        success: false, 
+        error: 'Chat service timeout - verifique que el servicio esté ejecutándose en http://192.168.1.58:8084' 
+      };
+    }
+    
+    console.error('❌ Health check error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    
+    if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
+      return { 
+        success: false, 
+        error: 'No se puede conectar al Chat Service. Verifique que esté ejecutándose en http://192.168.1.58:8084' 
+      };
+    }
+    
+    return { success: false, error: errorMessage };
+  }
+};
+
+/**
+ * Verificar token de autenticación en el backend principal
+ */
+export const verifyChatAuth = async (token: string) => {
+  const url = urlWebServices.chatVerifyAuth;
+
+  try {
+    // Validar que el token sea un JWT válido
+    if (!token || typeof token !== 'string') {
+      throw new Error('Token inválido: no es una cadena');
+    }
+
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Token inválido: no tiene formato JWT (debe tener 3 partes)');
+    }
+
+    // Verificar que cada parte sea base64 válida
+    try {
+      atob(parts[0]); // header
+      atob(parts[1]); // payload
+    } catch {
+      throw new Error('Token inválido: no es base64 válido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('🔍 Error response:', errorText);
+      throw new Error(`Token inválido: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    console.log('✅ Usuario autenticado en chat service:', data.data.user.name);
+    
+    return {
+      success: true,
+      user: data.data.user,
+      backendToken: token
+    };
+  } catch (error) {
+    console.error('❌ Chat authentication error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Error de autenticación desconocido' };
+  }
+};
+
+// Interfaz para respuesta de chat
+interface ChatResponse {
+  success: boolean;
+  messageId?: string;
+  userMessage?: string;
+  assistantResponse?: string;
+  timestamp?: string;
+  personalized?: boolean;
+  hasContext?: boolean;
+  fallbackMode?: boolean;
+  error?: string;
+}
+
+/**
+ * Enviar mensaje al Chat Service con fallback
+ */
+export const sendChatMessage = async (token: string, message: string, userId: string, fallbackMode: boolean = false): Promise<ChatResponse> => {
+  console.log('📡 sendChatMessage called with fallbackMode:', fallbackMode);
+  
+  // Si estamos en modo fallback, usar respuestas básicas
+  if (fallbackMode) {
+    console.log('🔄 Using fallback mode for chat response');
+    
+    // Simular un pequeño delay para parecer más natural
+    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+    
+    const fallbackResponse = getChatFallbackResponse(message);
+    
+    return {
+      success: true,
+      messageId: 'fallback_' + Date.now(),
+      userMessage: message,
+      assistantResponse: fallbackResponse,
+      timestamp: new Date().toISOString(),
+      personalized: false,
+      hasContext: false,
+      fallbackMode: true
+    };
+  }
+
+  // Intentar usar el Chat Service externo
+  const url = urlWebServices.chatSendMessage;
+  
+  console.log('📡 sendChatMessage called with:');
+  console.log('🔗 URL:', url);
+  console.log('🔐 Token length:', token.length);
+  console.log('📝 Message:', message);
+  console.log('👤 User ID:', userId);
+
+  try {
+    if (!token) {
+      throw new Error('No hay token de backend disponible');
+    }
+
+    const requestBody = { 
+      message: message,
+      user_id: userId 
+    };
+    
+    console.log('📦 Request body:', requestBody);
+
+    // Agregar timeout al request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Send message timeout');
+      controller.abort();
+    }, 10000); // 10 segundos de timeout
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response OK:', response.ok);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('❌ Error response text:', errorText);
+      throw new Error(`Send message failed: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('🔍 Chat service response data:', data);
+    
+    const result = {
+      success: true,
+      messageId: data.message_id,
+      userMessage: message,
+      assistantResponse: data.response, // El backend devuelve 'response', no 'assistant_response'
+      timestamp: data.timestamp,
+      personalized: true,
+      hasContext: true,
+      fallbackMode: false
+    };
+    
+    console.log('✅ Returning result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Send message error:', error);
+    
+    // Si hay error de red o timeout, usar fallback automáticamente
+    if (error instanceof Error && 
+        (error.name === 'AbortError' || 
+         error.message.includes('Network request failed') ||
+         error.message.includes('fetch'))) {
+      
+      console.log('🔄 Switching to fallback mode due to network error');
+      return await sendChatMessage(token, message, userId, true);
+    }
+    
+    return { success: false, error: error instanceof Error ? error.message : 'Error al enviar mensaje' };
+  }
+};
+
+/**
+ * Obtener historial de chat
+ */
+export const getChatHistory = async (token: string, userId: string, limit: number = 50) => {
+  const url = `${urlWebServices.chatGetHistory}/${userId}?limit=${limit}`;
+
+  try {
+    if (!token || !userId) {
+      throw new Error('No hay autenticación disponible');
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Get history failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    return {
+      success: true,
+      messages: data.history || [],
+      total: data.total_messages || 0
+    };
+  } catch (error) {
+    console.error('❌ Get history error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener historial' };
+  }
+};
+
+/**
+ * Inicializar Chat Service con validaciones y fallback
+ */
+export const initializeChatService = async (userToken: string) => {
+  try {
+    // Verificar que el chat service esté disponible
+    const healthCheck = await checkChatHealth();
+    if (!healthCheck.success) {
+      console.warn('⚠️ Chat Service no disponible, usando modo fallback');
+      // En lugar de fallar, retornamos éxito pero con advertencia
+      return { 
+        success: true, 
+        fallbackMode: true,
+        warning: 'Chat Service externo no disponible, usando respuestas básicas' 
+      };
+    }
+
+    console.log('✅ Chat Service inicializado');
+    return { success: true, fallbackMode: false };
+  } catch (error) {
+    console.error('❌ Error inicializando chat service:', error);
+    // Usar modo fallback en caso de error
+    return { 
+      success: true, 
+      fallbackMode: true,
+      warning: 'Error al conectar con Chat Service, usando modo básico'
+    };
+  }
+};
+
+/**
+ * Respuesta de fallback para el chat cuando el servicio externo no está disponible
+ */
+const getChatFallbackResponse = (message: string): string => {
+  const lowerMessage = message.toLowerCase();
+  
+  // Respuestas básicas basadas en palabras clave
+  if (lowerMessage.includes('hola') || lowerMessage.includes('holi')) {
+    return '¡Hola! 👋 Soy tu asistente financiero. Te ayudo con consultas sobre el mercado argentino. ¿En qué puedo ayudarte?';
+  }
+  
+  if (lowerMessage.includes('merval')) {
+    return 'El MERVAL es el índice principal de la Bolsa de Comercio de Buenos Aires. Representa el valor de las acciones más importantes del mercado argentino.';
+  }
+  
+  if (lowerMessage.includes('accion') || lowerMessage.includes('acciones')) {
+    return 'Las acciones son instrumentos de inversión que representan una parte de la propiedad de una empresa. En Argentina, las más populares incluyen Galicia, Tenaris, YPF, entre otras.';
+  }
+  
+  if (lowerMessage.includes('dolar') || lowerMessage.includes('dólar')) {
+    return 'En Argentina existen diferentes tipos de dólar: oficial, blue, MEP, CCL. Cada uno tiene cotizaciones diferentes según el mercado y regulaciones.';
+  }
+  
+  if (lowerMessage.includes('invertir') || lowerMessage.includes('inversion')) {
+    return 'Para invertir en Argentina puedes considerar: acciones del MERVAL, bonos soberanos, FCI, plazos fijos UVA, o instrumentos en dólares. Siempre consulta con un asesor financiero.';
+  }
+  
+  // Respuesta genérica
+  return 'Soy tu asistente financiero para el mercado argentino. Puedo ayudarte con consultas sobre el MERVAL, acciones, bonos, dólar y estrategias de inversión. ¿Qué te gustaría saber?';
 };
 

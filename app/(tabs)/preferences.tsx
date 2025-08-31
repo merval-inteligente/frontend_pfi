@@ -7,7 +7,7 @@ import { getDefaultUserPreferences } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     SafeAreaView,
@@ -35,13 +35,19 @@ export default function PreferencesScreen() {
   const router = useRouter();
   const { colorScheme } = useTheme();
   const { isAuthenticated } = useAuth();
-  const { userFavorites, updateFavorites } = usePreferencesSync();
+  const { updateFavorites: originalUpdateFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
+
+  // Crear versión estable de updateFavorites para evitar re-renders
+  const updateFavorites = useCallback((favorites: string[]) => {
+    originalUpdateFavorites(favorites);
+  }, [originalUpdateFavorites]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'sectors' | 'stocks'>('sectors');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isLoadingRef = useRef(false); // Usar ref en lugar de estado para evitar ciclos
   
   const userProfile = getDefaultUserPreferences();
 
@@ -62,7 +68,14 @@ export default function PreferencesScreen() {
   // Cargar datos desde el backend
   useEffect(() => {
     const loadData = async () => {
+      // Prevenir llamadas duplicadas usando ref
+      if (isLoadingRef.current) {
+        console.log('🔄 Ya se están cargando datos, saltando...');
+        return;
+      }
+
       try {
+        isLoadingRef.current = true;
         setLoading(true);
         setError(null);
 
@@ -78,10 +91,17 @@ export default function PreferencesScreen() {
             throw new Error('Token no disponible');
           }
 
+          // Agregar delay para evitar rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           const [sectorsResponse, stocksResponse, favoritesResponse] = await Promise.all([
             getSectors(token),
             getStocks(token),
-            getUserFavorites(token)
+            getUserFavorites(token).catch(error => {
+              // Si getUserFavorites falla, continúar con datos vacíos
+              console.warn('⚠️ Error obteniendo favoritos, usando datos vacíos:', error);
+              return { favorites: { favoriteStocks: [] }, message: 'Error obteniendo favoritos' };
+            })
           ]);
 
           console.log('📊 Respuesta sectores:', sectorsResponse);
@@ -94,18 +114,28 @@ export default function PreferencesScreen() {
 
           console.log('🔍 Símbolos favoritos extraídos:', userFavoritesSymbols);
 
-          // Transformar los datos del backend al formato esperado por la UI
-          const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
-            name: sector.name,
-            isSelected: sector.isSelected || false,
-            count: sector.count || 0
-          }));
-
+          // Primero mapear los stocks para poder calcular qué sectores están en uso
           const stocksData = stocksResponse.stocks.map((stock: any) => ({
             symbol: stock.symbol,
             name: stock.name,
             sector: stock.sector,
             isSelected: userFavoritesSymbols.includes(stock.symbol) // Usar datos frescos de la API
+          }));
+
+          // Calcular qué sectores tienen al menos una acción favorita
+          const sectorsWithFavorites = new Set(
+            stocksData
+              .filter((stock: StockItem) => stock.isSelected)
+              .map((stock: StockItem) => stock.sector)
+          );
+
+          console.log('🎯 Sectores con favoritos:', Array.from(sectorsWithFavorites));
+
+          // Transformar los datos del backend al formato esperado por la UI
+          const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
+            name: sector.name,
+            isSelected: sectorsWithFavorites.has(sector.name), // Marcar como seleccionado si tiene favoritos
+            count: sector.count || 0
           }));
 
           console.log('✅ Datos transformados - Sectores:', sectorsData.length);
@@ -129,18 +159,25 @@ export default function PreferencesScreen() {
         setStocks([]);
       } finally {
         setLoading(false);
+        isLoadingRef.current = false;
       }
     };
 
     loadData();
-  }, [isAuthenticated]); // Solo incluir dependencias realmente necesarias
+  }, [isAuthenticated, updateFavorites]); // Mantener updateFavorites pero usar ref para loading
 
-  const toggleStock = (stockSymbol: string) => {
-    setStocks(prev => prev.map(stock => 
-      stock.symbol === stockSymbol 
-        ? { ...stock, isSelected: !stock.isSelected }
-        : stock
-    ));
+  // Función helper para recalcular sectores seleccionados basado en stocks
+  const recalculateSectorsFromStocks = (updatedStocks: StockItem[]) => {
+    const sectorsWithFavorites = new Set(
+      updatedStocks
+        .filter(stock => stock.isSelected)
+        .map(stock => stock.sector)
+    );
+
+    setSectors(prev => prev.map(sector => ({
+      ...sector,
+      isSelected: sectorsWithFavorites.has(sector.name)
+    })));
   };
 
   const handleRemoveStock = async (stock: StockItem) => {
@@ -166,8 +203,15 @@ export default function PreferencesScreen() {
                 // Actualizar favoritos locales
                 updateFavorites(result.data.preferences.favoriteStocks);
                 
-                // Actualizar estado local
-                toggleStock(stock.symbol);
+                // Actualizar estado de stocks
+                const updatedStocks = stocks.map(s => ({
+                  ...s,
+                  isSelected: result.data.preferences.favoriteStocks.includes(s.symbol)
+                }));
+                setStocks(updatedStocks);
+                
+                // Recalcular sectores basado en los stocks actualizados
+                recalculateSectorsFromStocks(updatedStocks);
                 
                 Alert.alert(
                   'Éxito',
@@ -211,10 +255,14 @@ export default function PreferencesScreen() {
                 updateFavorites(result.data.preferences.favoriteStocks);
                 
                 // Actualizar estado de los stocks para reflejar los favoritos eliminados
-                setStocks(prev => prev.map(stock => ({
+                const updatedStocks = stocks.map(stock => ({
                   ...stock,
                   isSelected: result.data.preferences.favoriteStocks.includes(stock.symbol)
-                })));
+                }));
+                setStocks(updatedStocks);
+                
+                // Recalcular sectores basado en los stocks actualizados
+                recalculateSectorsFromStocks(updatedStocks);
                 
                 Alert.alert(
                   'Éxito',
@@ -275,10 +323,14 @@ export default function PreferencesScreen() {
                   updateFavorites(result.favorites);
                   
                   // Actualizar estado de los stocks para reflejar los nuevos favoritos
-                  setStocks(prev => prev.map(stock => ({
+                  const updatedStocks = stocks.map(stock => ({
                     ...stock,
                     isSelected: result.favorites.includes(stock.symbol)
-                  })));
+                  }));
+                  setStocks(updatedStocks);
+                  
+                  // Recalcular sectores basado en los stocks actualizados
+                  recalculateSectorsFromStocks(updatedStocks);
                   
                   Alert.alert(
                     'Éxito',
@@ -294,8 +346,16 @@ export default function PreferencesScreen() {
                   // Actualizar favoritos locales
                   updateFavorites(result.favorites);
                   
-                  // Actualizar estado local
-                  toggleStock(stock.symbol);
+                  // Actualizar estado de stocks
+                  const updatedStocks = stocks.map(s => 
+                    s.symbol === stock.symbol 
+                      ? { ...s, isSelected: true }
+                      : { ...s, isSelected: result.favorites.includes(s.symbol) }
+                  );
+                  setStocks(updatedStocks);
+                  
+                  // Recalcular sectores basado en los stocks actualizados
+                  recalculateSectorsFromStocks(updatedStocks);
                   
                   Alert.alert(
                     'Éxito',
@@ -592,17 +652,25 @@ export default function PreferencesScreen() {
                       const userFavoritesSymbols = favoritesResponse.favorites?.favoriteStocks || [];
                       updateFavorites(userFavoritesSymbols);
 
-                      const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
-                        name: sector.name,
-                        isSelected: sector.isSelected || false,
-                        count: sector.count || 0
-                      }));
-
+                      // Primero mapear los stocks para poder calcular qué sectores están en uso
                       const stocksData = stocksResponse.stocks.map((stock: any) => ({
                         symbol: stock.symbol,
                         name: stock.name,
                         sector: stock.sector,
-                        isSelected: userFavorites.includes(stock.symbol) // Usar userFavorites del contexto
+                        isSelected: userFavoritesSymbols.includes(stock.symbol) // Usar datos frescos de la API
+                      }));
+
+                      // Calcular qué sectores tienen al menos una acción favorita
+                      const sectorsWithFavorites = new Set(
+                        stocksData
+                          .filter((stock: StockItem) => stock.isSelected)
+                          .map((stock: StockItem) => stock.sector)
+                      );
+
+                      const sectorsData = sectorsResponse.sectors.map((sector: any) => ({
+                        name: sector.name,
+                        isSelected: sectorsWithFavorites.has(sector.name), // Marcar como seleccionado si tiene favoritos
+                        count: sector.count || 0
                       }));
 
                       setSectors(sectorsData);

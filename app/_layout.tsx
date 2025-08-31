@@ -20,6 +20,7 @@ function RootLayoutContent() {
         <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="personal-info" options={{ headerShown: false }} />
         <Stack.Screen name="security" options={{ headerShown: false }} />
