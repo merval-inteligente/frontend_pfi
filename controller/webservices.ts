@@ -1,5 +1,5 @@
-const urlApi = 'http://192.168.0.17:8080/'; // Para desarrollo con IP local actual
-const chatApi = 'http://192.168.0.17:8084/'; // Chat Service
+const urlApi = 'http://192.168.0.195:8080/'; // Para desarrollo con IP local actual
+const chatApi = 'http://192.168.0.195:8084/'; // Chat Service
 //const chatApi = 'http://localhost:8084/';
 //const urlApi = 'http://localhost:8080/'; // Para desarrollo (no funciona en React Native)
 //const urlApi = 'http://10.0.2.2:8080/'; // Para Android Emulator

@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { addSectorToFavorites, addStockToFavorites, getSectors, getStocks, getUserFavorites, removeFavoriteSector, removeFavoriteStock } from '@/controller/apiController';
-import { getDefaultUserPreferences } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -34,7 +33,7 @@ interface SectorItem {
 export default function PreferencesScreen() {
   const router = useRouter();
   const { colorScheme } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { updateFavorites: originalUpdateFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
 
@@ -49,8 +48,6 @@ export default function PreferencesScreen() {
   const [error, setError] = useState<string | null>(null);
   const isLoadingRef = useRef(false); // Usar ref en lugar de estado para evitar ciclos
   
-  const userProfile = getDefaultUserPreferences();
-
   const [sectors, setSectors] = useState<SectorItem[]>([]);
   const [stocks, setStocks] = useState<StockItem[]>([]);
 
@@ -514,14 +511,18 @@ export default function PreferencesScreen() {
               <Ionicons name="school-outline" size={16} color={colors.subtitle} />
               <Text style={[styles.profileLabel, { color: colors.subtitle }]}>Conocimiento</Text>
             </View>
-            <Text style={[styles.profileValue, { color: colors.text }]}>{userProfile.investmentKnowledge}</Text>
+            <Text style={[styles.profileValue, { color: colors.text }]}>
+              {user?.investmentKnowledge || 'No especificado'}
+            </Text>
           </View>
           <View style={styles.profileRow}>
             <View style={styles.profileItem}>
               <Ionicons name="trending-up-outline" size={16} color={colors.subtitle} />
               <Text style={[styles.profileLabel, { color: colors.subtitle }]}>Apetito de riesgo</Text>
             </View>
-            <Text style={[styles.profileValue, { color: colors.text }]}>{userProfile.riskAppetite}</Text>
+            <Text style={[styles.profileValue, { color: colors.text }]}>
+              {user?.riskAppetite || 'No especificado'}
+            </Text>
           </View>
         </View>
       </View>

@@ -1,7 +1,6 @@
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getDefaultPersonalInfo } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -17,13 +16,27 @@ import {
     View
 } from 'react-native';
 
+interface PersonalInfo {
+  name: string;
+  email: string;
+  avatar: string;
+  investmentKnowledge?: string;
+  riskAppetite?: string;
+}
+
 export default function PersonalInfoScreen() {
   const { colorScheme } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
   const colors = Colors[colorScheme];
 
-  const [personalInfo, setPersonalInfo] = useState(() => getDefaultPersonalInfo(user || undefined));
+  const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
+    name: user?.name || '',
+    email: user?.email || '',
+    avatar: user?.avatar || 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80',
+    investmentKnowledge: user?.investmentKnowledge,
+    riskAppetite: user?.riskAppetite
+  });
 
   const savePersonalInfo = () => {
     Alert.alert('Éxito', 'Información personal actualizada correctamente', [
@@ -89,74 +102,39 @@ export default function PersonalInfoScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Teléfono</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.phone}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, phone: text})}
-              keyboardType="phone-pad"
-              placeholder="+54 11 1234-5678"
-              placeholderTextColor={colors.subtitle}
-            />
-          </View>
+          {/* Investment Profile - Read Only */}
+          {(personalInfo.investmentKnowledge || personalInfo.riskAppetite) && (
+            <>
+              <View style={styles.readOnlySection}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Perfil de Inversión</Text>
+                <Text style={[styles.sectionSubtitle, { color: colors.subtitle }]}>
+                  Esta información no se puede modificar desde aquí
+                </Text>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Fecha de nacimiento</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.birthDate}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, birthDate: text})}
-              placeholder="DD/MM/AAAA"
-              placeholderTextColor={colors.subtitle}
-            />
-          </View>
+              {personalInfo.investmentKnowledge && (
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Conocimiento de Inversión</Text>
+                  <View style={[styles.readOnlyInput, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.readOnlyText, { color: colors.subtitle }]}>
+                      {personalInfo.investmentKnowledge}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Ocupación</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.occupation}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, occupation: text})}
-              placeholder="Tu ocupación"
-              placeholderTextColor={colors.subtitle}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Dirección</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.address}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, address: text})}
-              placeholder="Tu dirección"
-              placeholderTextColor={colors.subtitle}
-              multiline
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Documento</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.document}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, document: text})}
-              placeholder="Número de documento"
-              placeholderTextColor={colors.subtitle}
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Nacionalidad</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.cardBorder }]}
-              value={personalInfo.nationality}
-              onChangeText={(text) => setPersonalInfo({...personalInfo, nationality: text})}
-              placeholder="Tu nacionalidad"
-              placeholderTextColor={colors.subtitle}
-            />
-          </View>
+              {personalInfo.riskAppetite && (
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Apetito de Riesgo</Text>
+                  <View style={[styles.readOnlyInput, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.readOnlyText, { color: colors.subtitle }]}>
+                      {personalInfo.riskAppetite}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* Save Button */}
@@ -253,6 +231,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 16,
+    fontSize: 16,
+  },
+  readOnlySection: {
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  readOnlyInput: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  readOnlyText: {
     fontSize: 16,
   },
   buttonContainer: {

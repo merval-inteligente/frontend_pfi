@@ -190,31 +190,72 @@ export default function RegisterScreen() {
   const calculateRiskAppetite = () => {
     let score = 0;
     
-    // Pregunta 1: Personalidad financiera
-    if (onboardingData.riskQ1 === 'Analizo pros y contras') score += 1;
-    else if (onboardingData.riskQ1 === 'Me gusta apostar por grandes oportunidades') score += 2;
+    // Pregunta 1: ¿Qué harías con $1000?
+    if (onboardingData.riskQ1 === 'Invertir la mitad y dejar la mitad segura') score += 1;
+    else if (onboardingData.riskQ1 === 'Invertir todo para obtener mejores ganancias') score += 2;
     
-    // Pregunta 2: Situación hipotética con dinero
-    if (onboardingData.riskQ2 === 'Buscar algo que me dé más ganancia pero sea relativamente seguro') score += 1;
-    else if (onboardingData.riskQ2 === 'Arriesgar para intentar ganar mucho más') score += 2;
+    // Pregunta 2: Reacción a pérdidas
+    if (onboardingData.riskQ2 === 'Esperaría un poco a ver qué pasa') score += 1;
+    else if (onboardingData.riskQ2 === 'La mantendría y hasta compraría más si creo en la empresa') score += 2;
     
-    // Pregunta 3: Paciencia financiera
-    if (onboardingData.riskQ3 === 'Puedo esperar algunos meses') score += 1;
-    else if (onboardingData.riskQ3 === 'No me molesta esperar años si vale la pena') score += 2;
+    // Pregunta 3: Influencia social
+    if (onboardingData.riskQ3 === 'Investigaría un poco antes de decidir') score += 1;
+    else if (onboardingData.riskQ3 === 'Invertiría porque confío en mi amigo') score += 2;
     
     // Calcular nivel basado en puntaje total (0-6)
-    let riskLevel = 'Bajo';
-    if (score >= 4) riskLevel = 'Alto';
-    else if (score >= 2) riskLevel = 'Medio';
+    let riskLevel = 'Conservador';
+    if (score >= 4) riskLevel = 'Agresivo';
+    else if (score >= 2) riskLevel = 'Moderado';
     
     setOnboardingData(prev => ({ ...prev, riskAppetite: riskLevel }));
   };
 
+  // Funciones auxiliares que retornan valores calculados (para usar en el registro)
+  const calculateInvestmentKnowledgeValue = () => {
+    let score = 0;
+    
+    // Pregunta 1: ¿Sabes qué es una acción?
+    if (onboardingData.knowledgeQ1 === 'Tengo una idea general') score += 1;
+    else if (onboardingData.knowledgeQ1 === 'Sí, entiendo el concepto') score += 2;
+    
+    // Pregunta 2: Comprensión de inflación
+    if (onboardingData.knowledgeQ2 === 'Probablemente compre menos cosas') score += 1;
+    else if (onboardingData.knowledgeQ2 === 'Definitivamente perderá valor por la inflación') score += 2;
+    
+    // Pregunta 3: Conocimiento del MERVAL
+    if (onboardingData.knowledgeQ3 === 'Creo que es algo de la bolsa') score += 1;
+    else if (onboardingData.knowledgeQ3 === 'Sí, es el índice de la Bolsa de Buenos Aires') score += 2;
+    
+    // Calcular nivel basado en puntaje total (0-6)
+    if (score >= 4) return 'Avanzado';
+    else if (score >= 2) return 'Intermedio';
+    else return 'Principiante';
+  };
+
+  const calculateRiskAppetiteValue = () => {
+    let score = 0;
+    
+    // Pregunta 1: ¿Qué harías con $1000?
+    if (onboardingData.riskQ1 === 'Invertir la mitad y dejar la mitad segura') score += 1;
+    else if (onboardingData.riskQ1 === 'Invertir todo para obtener mejores ganancias') score += 2;
+    
+    // Pregunta 2: Reacción a pérdidas
+    if (onboardingData.riskQ2 === 'Esperaría un poco a ver qué pasa') score += 1;
+    else if (onboardingData.riskQ2 === 'La mantendría y hasta compraría más si creo en la empresa') score += 2;
+    
+    // Pregunta 3: Influencia social
+    if (onboardingData.riskQ3 === 'Investigaría un poco antes de decidir') score += 1;
+    else if (onboardingData.riskQ3 === 'Invertiría porque confío en mi amigo') score += 2;
+    
+    // Calcular nivel basado en puntaje total (0-6)
+    if (score >= 4) return 'Agresivo';
+    else if (score >= 2) return 'Moderado';
+    else return 'Conservador';
+  };
+
   const completeRegistration = async () => {
     try {
-      // Validar datos del formulario antes de enviar
-      
-      // Validaciones del lado del cliente
+      // Validaciones básicas
       if (!formData.email || !formData.password || !formData.name) {
         Alert.alert('Error', 'Todos los campos son requeridos');
         return;
@@ -230,107 +271,45 @@ export default function RegisterScreen() {
         return;
       }
       
-      // Validar que el nombre solo contenga letras y espacios
-      const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
-      if (!nameRegex.test(formData.name)) {
-        Alert.alert('Error', 'El nombre solo puede contener letras y espacios');
-        return;
-      }
+      // Calcular perfil de evaluación
+      const knowledge = calculateInvestmentKnowledgeValue();
+      const risk = calculateRiskAppetiteValue();
       
-      // Validar email básico
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        Alert.alert('Error', 'Por favor ingresa un email válido');
-        return;
-      }
+      // Registrar usuario con perfil
+      await register(formData.email, formData.password, formData.name, knowledge, risk);
       
-      // Primero registrar el usuario con el perfil de evaluación
-      await register(
-        formData.email, 
-        formData.password, 
-        formData.name,
-        onboardingData.investmentKnowledge,
-        onboardingData.riskAppetite
-      );
-      
-      // Esperar un momento para que el backend procese completamente el usuario
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
-      
-      // Obtener el token del usuario recién registrado
-      let token = await AsyncStorage.getItem('@auth_token');
-      
-      if (token) {
-        console.log('✅ Usuario registrado con perfil de evaluación exitosamente');
-      }
-      
-      // Intentar actualizar la lista de sectores con el nuevo token
-      await loadAvailableSectors();
-      
-      if (token && onboardingData.sectors.length > 0) {
-        // Guardar las preferencias de sectores seleccionadas
-        
-        // Filtrar sectores válidos (que existen en la lista disponible)
-        const validSectors = onboardingData.sectors.filter(sector => 
-          availableSectors.includes(sector)
-        );
-        const invalidSectors = onboardingData.sectors.filter(sector => 
-          !availableSectors.includes(sector)
-        );
-        
-        if (invalidSectors.length > 0) {
-          console.warn('⚠️ Sectores inválidos detectados:', invalidSectors);
-        }
-        
-        
-        if (validSectors.length === 0) {
-          console.warn('⚠️ No hay sectores válidos para agregar');
-        } else {
-          try {
-            // Intentar agregar cada sector válido con reintentos
-            for (const sectorName of validSectors) {
-              await addSectorWithRetry(sectorName, token);
+      // Guardar sectores preferidos si hay alguno seleccionado
+      if (onboardingData.sectors.length > 0) {
+        try {
+          const token = await AsyncStorage.getItem('@auth_token');
+          
+          if (token) {
+            // Agregar cada sector
+            for (const sectorName of onboardingData.sectors) {
+              try {
+                await addSectorToFavorites(sectorName, token);
+              } catch (sectorError) {
+                // Continuar con los otros sectores aunque uno falle
+                console.warn(`Error agregando sector ${sectorName}:`, sectorError);
+              }
             }
-            
-          } catch (preferencesError) {
-            console.error('⚠️ Error guardando preferencias:', preferencesError);
-            // Mostrar warning pero no bloquear el flujo
-            Alert.alert(
-              'Atención',
-              'Tu cuenta fue creada exitosamente, pero hubo un problema guardando tus preferencias. Puedes configurarlas más tarde en la pantalla de Preferencias.',
-              [{ text: 'Entendido' }]
-            );
           }
+        } catch (sectorsError) {
+          // No fallar el registro por problemas con sectores
+          console.warn('Error guardando sectores:', sectorsError);
         }
       }
       
+      // Mostrar mensaje de éxito y navegar
       Alert.alert(
         'Registro completado',
         `¡Bienvenido ${formData.name}! Tu perfil ha sido configurado exitosamente.`,
         [{ text: 'Continuar', onPress: () => router.replace('/(tabs)') }]
       );
+      
     } catch (error) {
+      console.error('Error en registro:', error);
       Alert.alert('Error', error instanceof Error ? error.message : 'Hubo un problema al completar el registro');
-    }
-  };
-
-  // Función auxiliar para agregar sector con reintentos
-  const addSectorWithRetry = async (sectorName: string, token: string, maxRetries: number = 3) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await addSectorToFavorites(sectorName, token);
-        return; // Éxito, salir de la función
-      } catch (error) {
-        console.error(`❌ Error intento ${attempt}/${maxRetries} para ${sectorName}:`, error);
-        
-        if (attempt === maxRetries) {
-          // Último intento fallido, re-lanzar el error
-          throw new Error(`No se pudo agregar el sector ${sectorName} después de ${maxRetries} intentos`);
-        }
-        
-        // Esperar antes del siguiente intento (backoff exponencial)
-        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
     }
   };
 

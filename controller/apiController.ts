@@ -75,8 +75,14 @@ export const signUp = async (userData: any) => {
         email: userData.email,
         password: userData.password,
         name: userData.name,
-        acceptTerms: userData.acceptTerms
+        acceptTerms: userData.acceptTerms,
+        ...(userData.investmentKnowledge && { investmentKnowledge: userData.investmentKnowledge }),
+        ...(userData.riskAppetite && { riskAppetite: userData.riskAppetite })
       };
+      
+      // Crear AbortController para timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
       
       let response = await fetch(url, {
         method: 'POST',
@@ -85,7 +91,10 @@ export const signUp = async (userData: any) => {
           Accept: 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       
       let data;
       try {
@@ -113,6 +122,17 @@ export const signUp = async (userData: any) => {
     }
   } catch (error: any) {
     console.error('💥 Error en signUp:', error.message);
+    
+    // Manejar timeout específicamente
+    if (error.name === 'AbortError') {
+      throw new Error('Timeout: No se pudo conectar con el servidor. Verifica tu conexión a internet.');
+    }
+    
+    // Manejar errores de red
+    if (error.message.includes('fetch')) {
+      throw new Error('Error de conexión: No se pudo conectar con el servidor.');
+    }
+    
     throw error;
   }
 };
@@ -162,6 +182,7 @@ export const getProfile = async token => {
     }
 
     const data = await response.json();
+    console.log('📋 getProfile response:', JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
     throw error;
@@ -1364,6 +1385,17 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
       }
     });
 
+    // Si es 404, significa que el usuario no tiene historial (usuario nuevo)
+    if (response.status === 404) {
+      console.log('ℹ️ Usuario nuevo sin historial de chat');
+      return {
+        success: true,
+        messages: [],
+        total: 0,
+        isNewUser: true
+      };
+    }
+
     if (!response.ok) {
       throw new Error(`Get history failed: ${response.status}`);
     }
@@ -1373,10 +1405,20 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
     return {
       success: true,
       messages: data.history || [],
-      total: data.total_messages || 0
+      total: data.total_messages || 0,
+      isNewUser: false
     };
   } catch (error) {
     console.error('❌ Get history error:', error);
+    // Si es un error de red o 404, tratarlo como usuario nuevo
+    if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
+      return {
+        success: true,
+        messages: [],
+        total: 0,
+        isNewUser: true
+      };
+    }
     return { success: false, error: error instanceof Error ? error.message : 'Error al obtener historial' };
   }
 };

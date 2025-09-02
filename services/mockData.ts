@@ -4,6 +4,8 @@ export interface User {
   email: string;
   name: string;
   avatar?: string;
+  investmentKnowledge?: string;
+  riskAppetite?: string;
   preferences: {
     favoriteStocks: string[];
     watchlist: string[];

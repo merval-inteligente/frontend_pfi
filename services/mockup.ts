@@ -8,13 +8,10 @@ import { User } from './mockData';
 export interface PersonalInfo {
   name: string;
   email: string;
-  phone: string;
-  birthDate: string;
-  occupation: string;
-  address: string;
   document: string;
-  nationality: string;
   avatar: string;
+  investmentKnowledge?: string;
+  riskAppetite?: string;
 }
 
 export interface SecuritySettings {

@@ -57,13 +57,6 @@ const profileSections = [
         icon: 'notifications-outline',
         rightElement: 'arrow' as const,
       },
-      {
-        id: '4',
-        title: 'Estrategia de Inversión',
-        subtitle: 'Perfil de riesgo: Moderado',
-        icon: 'trending-up-outline',
-        rightElement: 'arrow' as const,
-      },
     ],
   },
   {
@@ -159,6 +152,7 @@ const ProfileOptionItem = ({ option, onPress }: {
 export default function ProfileScreen() {
   const { theme, colorScheme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  console.log('🧾 Usuario logueado:', user);
   const router = useRouter();
   const colors = Colors[colorScheme];
 
@@ -207,9 +201,6 @@ export default function ProfileScreen() {
         break;
       case '3': // Configuración de Alertas
         router.push('/alerts-config');
-        break;
-      case '4': // Estrategia de Inversión
-        router.push('/investment-strategy');
         break;
       case '5': // Tema
         handleThemePress();
@@ -268,7 +259,7 @@ export default function ProfileScreen() {
           <View style={styles.avatarContainer}>
             <Image
               source={{
-                uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
+                uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
               }}
               style={styles.avatar}
               contentFit="cover"
