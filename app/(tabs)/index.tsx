@@ -2,7 +2,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getStocks } from '@/controller/apiController';
+import { getNews, getStocks } from '@/controller/apiController';
 import { MarketData, MarketService, NewsItem as MockNewsItem, NewsService, Stock, StockService } from '@/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,9 +11,34 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+// Interfaz para noticias del backend
+interface BackendNewsItem {
+  _id: string;
+  titulo: string;
+  resumen: string;
+  contenido: string;
+  empresas_merval: string[];
+  fecha_scrapeo: string;
+  fecha_publicacion_raw?: string;
+  url: string;
+}
+
 const StockItem = ({ stock }: { stock: Stock }) => {
   const { colorScheme } = useTheme();
   const colors = Colors[colorScheme];
+  
+  // Determinar color del sentimiento basado en el cambio porcentual
+  const getSentimentColor = () => {
+    if (stock.percentageChange > 0) return '#10b981'; // Verde para positivo
+    if (stock.percentageChange < 0) return '#ef4444'; // Rojo para negativo
+    return colors.subtitle; // Gris neutral
+  };
+  
+  const getSentimentText = () => {
+    if (stock.percentageChange > 0) return 'Positivo';
+    if (stock.percentageChange < 0) return 'Negativo';
+    return 'Neutral';
+  };
   
   const handlePress = () => {
     router.push({
@@ -46,8 +71,16 @@ const StockItem = ({ stock }: { stock: Stock }) => {
         </View>
       </View>
       <View style={styles.stockProgress}>
-        <View style={[styles.progressBarContainer, { backgroundColor: colorScheme === 'dark' ? '#434f40' : '#e9ecef' }]}>
-          <View style={[styles.progressBar, { width: `${Math.abs(stock.percentageChange) * 10}%`, backgroundColor: colors.success }]} />
+        <View style={styles.stockProgressInfo}>
+          <View style={[styles.progressBarContainer, { backgroundColor: colorScheme === 'dark' ? '#434f40' : '#e9ecef' }]}>
+            <View style={[styles.progressBar, { 
+              width: `${Math.abs(stock.percentageChange) * 10}%`, 
+              backgroundColor: getSentimentColor() 
+            }]} />
+          </View>
+          <Text style={[styles.sentimentLabel, { color: getSentimentColor() }]}>
+            {getSentimentText()}
+          </Text>
         </View>
         <Text style={[styles.stockValue, { color: colors.text }]}>${stock.currentPrice}</Text>
       </View>
@@ -58,9 +91,115 @@ const StockItem = ({ stock }: { stock: Stock }) => {
   );
 };
 
-const NewsCard = ({ news }: { news: MockNewsItem }) => {
+const NewsCard = ({ 
+  news, 
+  isBackendNews = false, 
+  isExpanded = false, 
+  onToggleExpand 
+}: { 
+  news: MockNewsItem | BackendNewsItem, 
+  isBackendNews?: boolean,
+  isExpanded?: boolean,
+  onToggleExpand?: () => void
+}) => {
   const { colorScheme } = useTheme();
   const colors = Colors[colorScheme];
+  
+  // Si es noticia del backend, convertir formato
+  if (isBackendNews) {
+    const backendNews = news as BackendNewsItem;
+    
+    const formatTimeAgo = (dateString: string) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+      
+      if (diffInHours < 1) return 'Ahora';
+      if (diffInHours < 24) return `${diffInHours}h`;
+      return `${Math.floor(diffInHours / 24)}d`;
+    };
+
+    const getCategoryIcon = () => {
+      // Determinar categoría basada en empresas MERVAL
+      if (backendNews.empresas_merval && backendNews.empresas_merval.length > 0) {
+        return 'business-outline';
+      }
+      return 'newspaper-outline';
+    };
+
+    const getCategoryColor = () => {
+      if (backendNews.empresas_merval && backendNews.empresas_merval.length > 0) {
+        return '#4A9EFF'; // Azul para empresas
+      }
+      return colors.tint;
+    };
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.newsItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+        onPress={() => {
+          // Aquí puedes agregar navegación a detalle de noticia
+          
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.newsHeader}>
+          <View style={[styles.newsCategoryIcon, { backgroundColor: getCategoryColor() + '15' }]}>
+            <Ionicons 
+              name={getCategoryIcon() as any} 
+              size={16} 
+              color={getCategoryColor()} 
+            />
+          </View>
+          <Text style={[styles.newsTimestamp, { color: colors.subtitle }]}>
+            {formatTimeAgo(backendNews.fecha_scrapeo)}
+          </Text>
+          {backendNews.empresas_merval && backendNews.empresas_merval.length > 0 && (
+            <View style={[styles.relatedStock, { backgroundColor: colors.tint + '15' }]}>
+              <Text style={[styles.relatedStockText, { color: colors.tint }]}>
+                {backendNews.empresas_merval[0]}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.newsTitle, { color: colors.text }]}>
+          {backendNews.titulo}
+        </Text>
+        <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.7}>
+          <Text style={[styles.newsSummary, { color: colors.subtitle }]}>
+            {(() => {
+              const content = backendNews.resumen || backendNews.contenido;
+              if (isExpanded) {
+                return content;
+              } else {
+                return content.length > 150 ? content.substring(0, 150) + '...' : content;
+              }
+            })()}
+          </Text>
+          {((backendNews.resumen || backendNews.contenido).length > 150) && (
+            <Text style={[styles.expandText, { color: colors.tint }]}>
+              {isExpanded ? 'Ver menos' : 'Ver más'}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <View style={styles.newsFooter}>
+          <View style={[styles.newsImpact, { backgroundColor: '#64748b' + '15' }]}>
+            <Ionicons 
+              name="newspaper-outline" 
+              size={12} 
+              color="#64748b" 
+            />
+            <Text style={[styles.newsImpactText, { color: '#64748b' }]}>
+              MERVAL
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // Lógica original para noticias mock
+  const mockNews = news as MockNewsItem;
   
   const getCategoryIcon = (category: MockNewsItem['category']) => {
     switch (category) {
@@ -97,31 +236,40 @@ const NewsCard = ({ news }: { news: MockNewsItem }) => {
   return (
     <View style={[styles.newsItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.newsHeader}>
-        <View style={[styles.newsCategoryIcon, { backgroundColor: getCategoryColor(news.category) + '15' }]}>
+        <View style={[styles.newsCategoryIcon, { backgroundColor: getCategoryColor(mockNews.category) + '15' }]}>
           <Ionicons 
-            name={getCategoryIcon(news.category) as any} 
+            name={getCategoryIcon(mockNews.category) as any} 
             size={16} 
-            color={getCategoryColor(news.category)} 
+            color={getCategoryColor(mockNews.category)} 
           />
         </View>
-        <Text style={[styles.newsTimestamp, { color: colors.subtitle }]}>{formatTimeAgo(news.publishedAt)}</Text>
-        {news.relatedStocks.length > 0 && (
+        <Text style={[styles.newsTimestamp, { color: colors.subtitle }]}>{formatTimeAgo(mockNews.publishedAt)}</Text>
+        {mockNews.relatedStocks.length > 0 && (
           <View style={[styles.relatedStock, { backgroundColor: colors.tint + '15' }]}>
-            <Text style={[styles.relatedStockText, { color: colors.tint }]}>{news.relatedStocks[0]}</Text>
+            <Text style={[styles.relatedStockText, { color: colors.tint }]}>{mockNews.relatedStocks[0]}</Text>
           </View>
         )}
       </View>
-      <Text style={[styles.newsTitle, { color: colors.text }]}>{news.title}</Text>
-      <Text style={[styles.newsSummary, { color: colors.subtitle }]}>{news.summary}</Text>
+      <Text style={[styles.newsTitle, { color: colors.text }]}>{mockNews.title}</Text>
+      <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.7}>
+        <Text style={[styles.newsSummary, { color: colors.subtitle }]}>
+          {isExpanded ? mockNews.summary : (mockNews.summary.length > 150 ? mockNews.summary.substring(0, 150) + '...' : mockNews.summary)}
+        </Text>
+        {mockNews.summary.length > 150 && (
+          <Text style={[styles.expandText, { color: colors.tint }]}>
+            {isExpanded ? 'Ver menos' : 'Ver más'}
+          </Text>
+        )}
+      </TouchableOpacity>
       <View style={styles.newsFooter}>
-        <View style={[styles.newsImpact, { backgroundColor: news.sentiment === 'positive' ? '#10b981' + '15' : news.sentiment === 'negative' ? '#ef4444' + '15' : '#64748b' + '15' }]}>
+        <View style={[styles.newsImpact, { backgroundColor: mockNews.sentiment === 'positive' ? '#10b981' + '15' : mockNews.sentiment === 'negative' ? '#ef4444' + '15' : '#64748b' + '15' }]}>
           <Ionicons 
-            name={news.sentiment === 'positive' ? 'trending-up' : news.sentiment === 'negative' ? 'trending-down' : 'remove'} 
+            name={mockNews.sentiment === 'positive' ? 'trending-up' : mockNews.sentiment === 'negative' ? 'trending-down' : 'remove'} 
             size={12} 
-            color={news.sentiment === 'positive' ? '#10b981' : news.sentiment === 'negative' ? '#ef4444' : '#64748b'} 
+            color={mockNews.sentiment === 'positive' ? '#10b981' : mockNews.sentiment === 'negative' ? '#ef4444' : '#64748b'} 
           />
-          <Text style={[styles.newsImpactText, { color: news.sentiment === 'positive' ? '#10b981' : news.sentiment === 'negative' ? '#ef4444' : '#64748b' }]}>
-            {news.sentiment === 'positive' ? 'Positivo' : news.sentiment === 'negative' ? 'Negativo' : 'Neutral'}
+          <Text style={[styles.newsImpactText, { color: mockNews.sentiment === 'positive' ? '#10b981' : mockNews.sentiment === 'negative' ? '#ef4444' : '#64748b' }]}>
+            {mockNews.sentiment === 'positive' ? 'Positivo' : mockNews.sentiment === 'negative' ? 'Negativo' : 'Neutral'}
           </Text>
         </View>
       </View>
@@ -136,11 +284,27 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
   
   const [userStocks, setUserStocks] = useState<Stock[]>([]);
-  const [news, setNews] = useState<MockNewsItem[]>([]);
+  const [news, setNews] = useState<(MockNewsItem | BackendNewsItem)[]>([]);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAllStocks, setShowAllStocks] = useState(false);
   const [showAllNews, setShowAllNews] = useState(false);
+  const [newsSource, setNewsSource] = useState<'backend' | 'mock'>('backend');
+  const [lastNewsLoad, setLastNewsLoad] = useState<number>(0);
+  const [expandedNews, setExpandedNews] = useState<Set<string>>(new Set());
+
+  // Función para alternar expansión de una noticia
+  const toggleNewsExpansion = (newsId: string) => {
+    setExpandedNews(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(newsId)) {
+        newSet.delete(newsId);
+      } else {
+        newSet.add(newsId);
+      }
+      return newSet;
+    });
+  };
 
   // Función para obtener el token almacenado
   const getStoredToken = async (): Promise<string | null> => {
@@ -178,6 +342,10 @@ export default function HomeScreen() {
               }));
             
             setUserStocks(favoriteStocks);
+            
+            // 🕐 Delay para evitar rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
           } else {
             throw new Error('No token available');
           }
@@ -201,9 +369,41 @@ export default function HomeScreen() {
         }
       }
       
-      // Load news
-      const newsData = await NewsService.getNews(5);
-      setNews(newsData);
+      // Load news from backend with caching
+      const now = Date.now();
+      const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos
+      
+      if (isAuthenticated && (now - lastNewsLoad > CACHE_DURATION)) {
+        try {
+          const token = await getStoredToken();
+          if (token) {
+            const newsResponse = await getNews(token, 1, 5, 'fecha_scrapeo', 'desc');
+            
+            if (newsResponse.success && newsResponse.data?.news) {
+              setNews(newsResponse.data.news);
+              setNewsSource('backend');
+              setLastNewsLoad(now);
+            } else {
+              throw new Error(newsResponse.error || 'Error obteniendo noticias del backend');
+            }
+          } else {
+            throw new Error('No token available');
+          }
+        } catch (error) {
+          console.error('Error loading backend news, using fallback:', error);
+          // Fallback a datos mock
+          const newsData = await NewsService.getNews(5);
+          setNews(newsData);
+          setNewsSource('mock');
+        }
+      } else if (isAuthenticated) {
+        // Cache válido, no hacer nada
+      } else {
+        // Usuario no autenticado, usar datos mock
+        const newsData = await NewsService.getNews(5);
+        setNews(newsData);
+        setNewsSource('mock');
+      }
       
       // Load market data
       const market = await MarketService.getMarketData();
@@ -214,7 +414,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, user, userFavorites]);
+  }, [isAuthenticated, user, userFavorites, lastNewsLoad]);
 
   // Cargar datos inicial cuando el usuario esté autenticado  
   useEffect(() => {
@@ -232,7 +432,6 @@ export default function HomeScreen() {
     if (isAuthenticated && userFavorites && userFavorites.length > 0) {
       const reloadStockData = async () => {
         try {
-          
           // Intentar cargar desde backend primero
           const token = await getStoredToken();
           if (token) {
@@ -336,11 +535,19 @@ export default function HomeScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Noticias</Text>
         </View>
         
-        {displayedNews.map((newsItem) => (
-          <View key={newsItem.id} style={{ paddingHorizontal: 16 }}>
-            <NewsCard news={newsItem} />
-          </View>
-        ))}
+        {displayedNews.map((newsItem, index) => {
+          const newsId = newsSource === 'backend' ? (newsItem as BackendNewsItem)._id || `news-${index}` : (newsItem as MockNewsItem).id;
+          return (
+            <View key={newsId} style={{ paddingHorizontal: 16 }}>
+              <NewsCard 
+                news={newsItem} 
+                isBackendNews={newsSource === 'backend'} 
+                isExpanded={expandedNews.has(newsId)}
+                onToggleExpand={() => toggleNewsExpansion(newsId)}
+              />
+            </View>
+          );
+        })}
         
         {news.length > 2 && (
           <View style={{ paddingHorizontal: 16 }}>
@@ -564,6 +771,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  stockProgressInfo: {
+    alignItems: 'center',
+    gap: 4,
+  },
   progressBarContainer: {
     width: 88,
     height: 4,
@@ -573,6 +784,11 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     borderRadius: 2,
+  },
+  sentimentLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   stockValue: {
     fontSize: 14,
@@ -740,6 +956,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
+  },
+  expandText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'right',
   },
   newsFooter: {
     flexDirection: 'row',

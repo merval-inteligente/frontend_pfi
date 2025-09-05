@@ -141,11 +141,11 @@ export default function ChatScreen() {
   // Función para cargar historial de chat
   const loadChatHistory = async (token: string, userId: string) => {
     try {
-      console.log('🔄 Cargando historial de chat para usuario:', userId);
+      
       const historyResult = await getChatHistory(token, userId, 10); // Últimos 10 mensajes
       
       if (historyResult.success && historyResult.messages && historyResult.messages.length > 0) {
-        console.log('✅ Historial cargado exitosamente:', historyResult.messages.length, 'mensajes');
+        
         
         // Convertir mensajes del historial al formato del chat
         const historyMessages: ChatMessage[] = historyResult.messages.map((msg: any, index: number) => {
@@ -173,14 +173,14 @@ export default function ChatScreen() {
         return historyMessages;
       } else {
         if (historyResult.isNewUser) {
-          console.log('ℹ️ Usuario nuevo detectado - iniciando con chat limpio');
+          
         } else {
-          console.log('ℹ️ Usuario sin historial previo');
+          
         }
         return [];
       }
     } catch (error) {
-      console.log('ℹ️ No se pudo cargar el historial (usuario nuevo):', error instanceof Error ? error.message : 'Error desconocido');
+      
       return [];
     }
   };

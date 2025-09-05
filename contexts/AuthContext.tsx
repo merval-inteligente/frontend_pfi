@@ -48,7 +48,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           
           if (response.success && response.data) {
             const userData = response.data.user;
-            console.log('👤 Datos completos del usuario desde backend:', JSON.stringify(userData, null, 2));
+            
             
             // Adaptar estructura del usuario desde el backend
             const adaptedUser: User = {
@@ -237,13 +237,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.success && response.data) {
         const userData = response.data.user;
         const token = response.data.token;
-        console.log('👤 Datos del usuario recién registrado:', JSON.stringify(userData, null, 2));
+        
         
         // Guardar token JWT
         await AsyncStorage.setItem('@auth_token', token);
-        console.log('✅ Token guardado correctamente');
         
-        console.log('👤 Adaptando estructura del usuario...');
+        
+        
         // Adaptar estructura del usuario para el frontend
         const adaptedUser: User = {
           id: userData.id,

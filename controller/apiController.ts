@@ -64,7 +64,6 @@ export const signUp = async (userData: any) => {
       let data = await response.json();
 
       if (!response.ok) {
-        console.error('❌ Error en registro con avatar:', data);
         throw new Error(data.message || 'Error en el registro');
       }
 
@@ -100,15 +99,11 @@ export const signUp = async (userData: any) => {
       try {
         data = await response.json();
       } catch (parseError) {
-        console.error('❌ Error parseando JSON:', parseError);
         const textResponse = await response.text();
-        console.error('📄 Respuesta como texto:', textResponse);
         throw new Error('Error en la respuesta del servidor (no es JSON válido)');
       }
 
       if (!response.ok) {
-        console.error('❌ Error en registro:', data);
-        
         // Si hay errores de validación específicos, mostrar el primero
         if (data.errors && data.errors.length > 0) {
           const firstError = data.errors[0];
@@ -121,8 +116,6 @@ export const signUp = async (userData: any) => {
       return data;
     }
   } catch (error: any) {
-    console.error('💥 Error en signUp:', error.message);
-    
     // Manejar timeout específicamente
     if (error.name === 'AbortError') {
       throw new Error('Timeout: No se pudo conectar con el servidor. Verifica tu conexión a internet.');
@@ -182,7 +175,7 @@ export const getProfile = async token => {
     }
 
     const data = await response.json();
-    console.log('📋 getProfile response:', JSON.stringify(data, null, 2));
+    
     return data;
   } catch (error) {
     throw error;
@@ -251,11 +244,9 @@ export const requestPasswordReset = async (email: string) => {
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Error: Timeout - La solicitud tardó demasiado tiempo');
       throw new Error('La solicitud tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
     }
 
-    console.error('❌ Error en requestPasswordReset:', error);
     throw error;
   }
 };
@@ -328,11 +319,9 @@ export const verifyResetCode = async (email: string, code: string) => {
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Error: Timeout - La verificación tardó demasiado tiempo');
       throw new Error('La verificación tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
     }
 
-    console.error('❌ Error en verifyResetCode:', error);
     throw error;
   }
 };
@@ -406,11 +395,9 @@ export const resetPassword = async (email: string, code: string, newPassword: st
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Error: Timeout - El cambio de contraseña tardó demasiado tiempo');
       throw new Error('El cambio de contraseña tardó demasiado tiempo. Verifica tu conexión a internet e inténtalo de nuevo.');
     }
 
-    console.error('❌ Error en resetPassword:', error);
     throw error;
   }
 };
@@ -1152,7 +1139,6 @@ export const removeFavoriteSector = async (token: string, sector: string): Promi
  */
 export const checkChatHealth = async () => {
   const url = urlWebServices.chatHealth;
-  
 
   try {
     // Crear un controlador AbortController para timeout
@@ -1172,7 +1158,6 @@ export const checkChatHealth = async () => {
     // Limpiar el timeout si la respuesta llegó a tiempo
     clearTimeout(timeoutId);
     
-    
     if (!response.ok) {
       throw new Error(`Health check failed: ${response.status}`);
     }
@@ -1188,14 +1173,12 @@ export const checkChatHealth = async () => {
     return result;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Chat health check timeout - Chat service may not be running');
       return { 
         success: false, 
         error: 'Chat service timeout - verifique que el servicio esté ejecutándose en http://192.168.1.58:8084' 
       };
     }
     
-    console.error('❌ Health check error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     
     if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch')) {
@@ -1248,14 +1231,12 @@ export const verifyChatAuth = async (token: string) => {
 
     const data = await response.json();
     
-    
     return {
       success: true,
       user: data.data.user,
       backendToken: token
     };
   } catch (error) {
-    console.error('❌ Chat authentication error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Error de autenticación desconocido' };
   }
 };
@@ -1277,10 +1258,8 @@ interface ChatResponse {
  * Enviar mensaje al Chat Service con fallback
  */
 export const sendChatMessage = async (token: string, message: string, userId: string, fallbackMode: boolean = false): Promise<ChatResponse> => {
-  
   // Si estamos en modo fallback, usar respuestas básicas
   if (fallbackMode) {
-    
     // Simular un pequeño delay para parecer más natural
     await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
     
@@ -1300,7 +1279,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
 
   // Intentar usar el Chat Service externo
   const url = urlWebServices.chatSendMessage;
-  
 
   try {
     if (!token) {
@@ -1311,7 +1289,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
       message: message,
       user_id: userId 
     };
-    
 
     // Agregar timeout al request
     const controller = new AbortController();
@@ -1330,7 +1307,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
     });
 
     clearTimeout(timeoutId);
-
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1352,8 +1328,6 @@ export const sendChatMessage = async (token: string, message: string, userId: st
     
     return result;
   } catch (error) {
-    console.error('❌ Send message error:', error);
-    
     // Si hay error de red o timeout, usar fallback automáticamente
     if (error instanceof Error && 
         (error.name === 'AbortError' || 
@@ -1387,7 +1361,6 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
 
     // Si es 404, significa que el usuario no tiene historial (usuario nuevo)
     if (response.status === 404) {
-      console.log('ℹ️ Usuario nuevo sin historial de chat');
       return {
         success: true,
         messages: [],
@@ -1409,7 +1382,6 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
       isNewUser: false
     };
   } catch (error) {
-    console.error('❌ Get history error:', error);
     // Si es un error de red o 404, tratarlo como usuario nuevo
     if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
       return {
@@ -1481,5 +1453,391 @@ const getChatFallbackResponse = (message: string): string => {
   
   // Respuesta genérica
   return 'Soy tu asistente financiero para el mercado argentino. Puedo ayudarte con consultas sobre el MERVAL, acciones, bonos, dólar y estrategias de inversión. ¿Qué te gustaría saber?';
+};
+
+// 📰 ENDPOINTS DE NOTICIAS MERVAL
+
+/**
+ * Helper para manejar rate limiting con reintentos
+ */
+const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetries: number = 2): Promise<Response> => {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      // Agregar delay progresivo entre intentos
+      if (attempt > 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 2), 5000); // Exponential backoff, máx 5s
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const response = await fetch(url, options);
+      
+      // Si es rate limit (429), intentar nuevamente
+      if (response.status === 429 && attempt <= maxRetries) {
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      if (attempt === maxRetries + 1) {
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error('Max reintentos alcanzado');
+};
+
+/**
+ * Listar todas las noticias con paginación y manejo de rate limiting
+ */
+export const getNews = async (token: string, page: number = 1, limit: number = 20, sortBy: string = 'fecha_scrapeo', sortOrder: string = 'desc') => {
+  const url = `${urlWebServices.baseUrl}api/news?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    const response = await makeRequestWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('Rate limit persistente: 429');
+      }
+      
+      throw new Error(`Error al obtener noticias: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener noticias'
+    };
+  }
+};
+
+/**
+ * Buscar noticias por texto
+ */
+export const searchNews = async (token: string, searchTerm: string, page: number = 1, limit: number = 20) => {
+  const url = `${urlWebServices.baseUrl}api/news/search?q=${encodeURIComponent(searchTerm)}&page=${page}&limit=${limit}`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    if (!searchTerm.trim()) {
+      throw new Error('Término de búsqueda requerido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error en búsqueda de noticias: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error en búsqueda de noticias'
+    };
+  }
+};
+
+/**
+ * Búsqueda avanzada de noticias
+ */
+export const advancedSearchNews = async (
+  token: string,
+  filters: {
+    q?: string;
+    company?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    limit?: number;
+  } = {}
+) => {
+  const params = new URLSearchParams();
+  
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      params.append(key, value.toString());
+    }
+  });
+
+  const url = `${urlWebServices.baseUrl}api/news/advanced-search?${params.toString()}`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error en búsqueda avanzada: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error en búsqueda avanzada'
+    };
+  }
+};
+
+/**
+ * Obtener noticias por empresa MERVAL
+ */
+export const getNewsByCompany = async (token: string, company: string, page: number = 1, limit: number = 20) => {
+  const url = `${urlWebServices.baseUrl}api/news/company/${encodeURIComponent(company)}?page=${page}&limit=${limit}`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    if (!company.trim()) {
+      throw new Error('Nombre de empresa requerido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error obteniendo noticias de ${company}: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : `Error obteniendo noticias de ${company}`
+    };
+  }
+};
+
+/**
+ * Obtener empresas MERVAL disponibles
+ */
+export const getAvailableCompanies = async (token: string) => {
+  const url = `${urlWebServices.baseUrl}api/news/companies`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error obteniendo empresas: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('❌ Error obteniendo empresas:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error obteniendo empresas'
+    };
+  }
+};
+
+/**
+ * Obtener noticia específica por ID
+ */
+export const getNewsById = async (token: string, newsId: string) => {
+  const url = `${urlWebServices.baseUrl}api/news/${newsId}`;
+
+  try {
+    if (!token) {
+      throw new Error('Token de autenticación requerido');
+    }
+
+    if (!newsId.trim()) {
+      throw new Error('ID de noticia requerido');
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Noticia no encontrada');
+      }
+      throw new Error(`Error obteniendo noticia: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('❌ Error obteniendo noticia:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error obteniendo noticia'
+    };
+  }
+};
+
+// 🧪 FUNCIÓN DE TEST TEMPORAL - REMOVER EN PRODUCCIÓN
+export const testNewsEndpoint = async () => {
+  const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YjYxMjJiOTc5MThjZTIxYzVlZmQxZiIsImVtYWlsIjoibmljb2xhc3BldGNvZmZAZ21haWwuY29tIiwiaWF0IjoxNzU2NzczNjY4LCJleHAiOjE3NTczNzg0Njh9.zJFKytB9P-Fkl3QaU9R8jNHeACivyZp1GLhS4G3xIWw';
+  
+  console.log('🧪 === INICIANDO TEST DE NOTICIAS ===');
+  console.log('🔗 URL Base:', urlWebServices.baseUrl);
+  
+  // Test 1: Verificar conectividad del backend
+  try {
+    console.log('🔄 Test 1: Verificando conectividad del backend...');
+    const baseResponse = await fetch(urlWebServices.baseUrl, {
+      method: 'GET'
+    });
+    console.log('✅ Backend disponible - Status:', baseResponse.status);
+  } catch (error) {
+    console.error('❌ Backend no disponible:', error);
+    return;
+  }
+
+  // Test 2: Probar endpoint de noticias
+  const newsUrl = `${urlWebServices.baseUrl}api/news?page=1&limit=5`;
+  console.log('🔄 Test 2: Probando endpoint de noticias...');
+  console.log('🌐 URL completa:', newsUrl);
+  
+  try {
+    const response = await fetch(newsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${testToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log('📋 Response Status:', response.status);
+    console.log('📋 Response StatusText:', response.statusText);
+    console.log('📋 Response Headers:', JSON.stringify([...response.headers.entries()]));
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ SUCCESS! Datos recibidos:');
+      console.log('📰 Cantidad de noticias:', data.data?.news?.length || 0);
+      console.log('📊 Estructura de respuesta:', Object.keys(data));
+      if (data.data?.news && data.data.news.length > 0) {
+        console.log('📝 Primera noticia:', {
+          titulo: data.data.news[0].titulo,
+          fecha: data.data.news[0].fecha_scrapeo,
+          empresas: data.data.news[0].empresas_merval
+        });
+      }
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Error Response Body:', errorText);
+      
+      // Test 3: Verificar endpoint alternativo
+      if (response.status === 404) {
+        console.log('🔄 Test 3: Probando endpoints alternativos...');
+        
+        const alternativeUrls = [
+          `${urlWebServices.baseUrl}news`,
+          `${urlWebServices.baseUrl}api/noticias`,
+          `${urlWebServices.baseUrl}noticias`
+        ];
+        
+        for (const altUrl of alternativeUrls) {
+          try {
+            console.log('🌐 Probando:', altUrl);
+            const altResponse = await fetch(altUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${testToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            console.log(`📋 ${altUrl} - Status:`, altResponse.status);
+            if (altResponse.ok) {
+              console.log('✅ ¡Endpoint alternativo encontrado!');
+              break;
+            }
+          } catch (altError) {
+            console.log(`❌ ${altUrl} - Error:`, altError);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error en test de noticias:', error);
+  }
+  
+  console.log('🧪 === FIN DEL TEST ===');
 };
 

@@ -152,7 +152,7 @@ const ProfileOptionItem = ({ option, onPress }: {
 export default function ProfileScreen() {
   const { theme, colorScheme, setTheme } = useTheme();
   const { user, logout } = useAuth();
-  console.log('🧾 Usuario logueado:', user);
+  
   const router = useRouter();
   const colors = Colors[colorScheme];
 
