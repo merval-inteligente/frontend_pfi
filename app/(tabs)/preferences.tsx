@@ -66,9 +66,11 @@ export default function PreferencesScreen() {
   useEffect(() => {
     const loadData = async () => {
       // Prevenir llamadas duplicadas usando ref
-        if (isLoadingRef.current) {
-          return;
-        }      try {
+      if (isLoadingRef.current) {
+        return;
+      }
+      
+      try {
         isLoadingRef.current = true;
         setLoading(true);
         setError(null);
@@ -124,8 +126,11 @@ export default function PreferencesScreen() {
           setSectors(sectorsData);
           setStocks(stocksData);
         } else {
-          // Usuario no autenticado: mostrar mensaje de que necesita autenticarse
-          throw new Error('Se requiere autenticación para ver las preferencias');
+          // Usuario no autenticado: limpiar datos silenciosamente
+          console.log('🔓 Usuario no autenticado, limpiando datos de preferencias');
+          setSectors([]);
+          setStocks([]);
+          updateFavorites([]);
         }
       } catch (error) {
         console.error('❌ Error cargando datos:', error);
@@ -659,8 +664,11 @@ export default function PreferencesScreen() {
                       setSectors(sectorsData);
                       setStocks(stocksData);
                     } else {
-                      // Usuario no autenticado: mostrar mensaje de que necesita autenticarse
-                      throw new Error('Se requiere autenticación para ver las preferencias');
+                      // Usuario no autenticado: limpiar datos silenciosamente
+                      console.log('🔓 Usuario no autenticado en retry, limpiando datos de preferencias');
+                      setSectors([]);
+                      setStocks([]);
+                      updateFavorites([]);
                     }
                   } catch (error) {
                     console.error('Error cargando datos:', error);

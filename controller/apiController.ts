@@ -32,6 +32,7 @@ interface RemoveFavoriteSectorResponse {
 
 export const signUp = async (userData: any) => {
   let url = urlWebServices.signUp;
+  console.log('🔐 [AUTH] Iniciando registro de usuario:', { email: userData.email, hasAvatar: !!userData.avatar });
 
   try {
     // Si incluye avatar, usar FormData
@@ -67,6 +68,7 @@ export const signUp = async (userData: any) => {
         throw new Error(data.message || 'Error en el registro');
       }
 
+      console.log('✅ [AUTH] Usuario registrado exitosamente con avatar');
       return data;
     } else {
       // Registro sin avatar - JSON normal
@@ -113,6 +115,7 @@ export const signUp = async (userData: any) => {
         throw new Error(data.message || 'Error en el registro');
       }
 
+      console.log('✅ [AUTH] Usuario registrado exitosamente sin avatar');
       return data;
     }
   } catch (error: any) {
@@ -132,6 +135,7 @@ export const signUp = async (userData: any) => {
 
 export const signIn = async userData => {
   let url = urlWebServices.signIn;
+  console.log('🔐 [AUTH] Iniciando login de usuario:', { email: userData.email });
 
   try {
     let response = await fetch(url, {
@@ -152,6 +156,7 @@ export const signIn = async userData => {
       throw new Error(data.message || 'Error en el login');
     }
     
+    console.log('✅ [AUTH] Login exitoso, token generado');
     return data;
   } catch (error) {
     throw error;
@@ -494,6 +499,7 @@ export const deleteAvatar = async token => {
  */
 export const getUserPreferences = async (token) => {
   const url = urlWebServices.getUserPreferences;
+  console.log('⚙️ [PREFERENCES] Obteniendo preferencias del usuario');
 
   try {
     const response = await fetch(url, {
@@ -509,6 +515,7 @@ export const getUserPreferences = async (token) => {
     }
 
     const data = await response.json();
+    console.log('✅ [PREFERENCES] Preferencias obtenidas correctamente');
     return data;
   } catch (error) {
     throw error;
@@ -585,6 +592,7 @@ export const patchUserPreferences = async (changes, token) => {
  */
 export const addToFavorites = async (symbol, token) => {
   const url = urlWebServices.addToFavorites;
+  console.log('⭐ [FAVORITES] Agregando a favoritos:', { symbol });
 
   try {
     const response = await fetch(url, {
@@ -611,6 +619,7 @@ export const addToFavorites = async (symbol, token) => {
       throw new Error(data.message || 'Error agregando a favoritos');
     }
 
+    console.log('✅ [FAVORITES] Agregado exitosamente a favoritos:', { symbol });
     return {
       success: true,
       message: data.message,
@@ -630,6 +639,7 @@ export const addToFavorites = async (symbol, token) => {
  */
 export const removeFromFavorites = async (symbol, token) => {
   const url = `${urlWebServices.removeFromFavorites}${symbol}`;
+  console.log('🗑️ [FAVORITES] Removiendo de favoritos:', { symbol });
 
   try {
     const response = await fetch(url, {
@@ -645,6 +655,7 @@ export const removeFromFavorites = async (symbol, token) => {
     }
 
     const data = await response.json();
+    console.log('✅ [FAVORITES] Removido exitosamente de favoritos:', { symbol });
     return {
       success: true,
       message: data.message,
@@ -784,6 +795,7 @@ export const getStocks = async (token: string) => {
  */
 export const getUserFavorites = async (token: string) => {
   const url = urlWebServices.getUserFavorites;
+  console.log('⭐ [FAVORITES] Obteniendo lista de favoritos del usuario');
 
   try {
     const response = await fetch(url, {
@@ -833,6 +845,7 @@ export const getUserFavorites = async (token: string) => {
     }
 
     const data = await response.json();
+    console.log('✅ [FAVORITES] Favoritos obtenidos correctamente:', { count: Object.keys(data.data.preferences || {}).length });
     return {
       favorites: data.data.preferences || {},
       message: data.message
@@ -1492,6 +1505,7 @@ const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetrie
  */
 export const getNews = async (token: string, page: number = 1, limit: number = 20, sortBy: string = 'fecha_scrapeo', sortOrder: string = 'desc') => {
   const url = `${urlWebServices.baseUrl}api/news?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
+  console.log('📰 [NEWS] Obteniendo noticias:', { page, limit, sortBy, sortOrder });
 
   try {
     if (!token) {
@@ -1515,6 +1529,7 @@ export const getNews = async (token: string, page: number = 1, limit: number = 2
     }
 
     const data = await response.json();
+    console.log('✅ [NEWS] Noticias obtenidas correctamente:', { total: data.data?.total || 0, articles: data.data?.news?.length || 0 });
     return {
       success: true,
       data: data.data,
