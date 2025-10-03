@@ -67,7 +67,7 @@ export const PreferencesSyncProvider: React.FC<PreferencesSyncProviderProps> = (
   }, []);
 
   const value: PreferencesSyncContextType = {
-    userFavorites,
+    userFavorites: Array.isArray(userFavorites) ? userFavorites : [],
     refreshFavorites,
     updateFavorites,
     isLoading,

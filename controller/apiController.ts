@@ -1,5 +1,53 @@
 import urlWebServices from './webservices';
 
+// 🔄 SISTEMA DE CACHE ROBUSTO
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  expiresIn: number;
+}
+
+const apiCache = new Map<string, CacheEntry>();
+const CACHE_DURATION = {
+  STOCKS: 30000,     // 30 segundos
+  NEWS: 60000,       // 1 minuto  
+  FAVORITES: 20000,  // 20 segundos
+  PREFERENCES: 25000 // 25 segundos
+};
+
+// Función para obtener de cache
+const getFromCache = (key: string): any | null => {
+  const entry = apiCache.get(key);
+  if (entry && Date.now() - entry.timestamp < entry.expiresIn) {
+    console.log(`📦 [CACHE] Hit para: ${key}`);
+    return entry.data;
+  }
+  if (entry) {
+    apiCache.delete(key); // Limpiar cache expirado
+    console.log(`🗑️ [CACHE] Expirado y limpiado: ${key}`);
+  }
+  return null;
+};
+
+// Función para guardar en cache
+const saveToCache = (key: string, data: any, duration: number): void => {
+  apiCache.set(key, {
+    data: data,
+    timestamp: Date.now(),
+    expiresIn: duration
+  });
+  console.log(`💾 [CACHE] Guardado: ${key} (${duration/1000}s)`);
+};
+
+// Función para limpiar cache de usuario específico
+const clearUserCache = (userId?: string): void => {
+  const keysToDelete = Array.from(apiCache.keys()).filter(key => 
+    !userId || key.includes(userId)
+  );
+  keysToDelete.forEach(key => apiCache.delete(key));
+  console.log(`🧹 [CACHE] Limpiado ${keysToDelete.length} entradas`);
+};
+
 // Interfaces para tipos
 interface RemoveFavoriteStockResponse {
   status: number;
@@ -753,10 +801,19 @@ export const getSectors = async (token: string) => {
  * @returns {Promise} Lista de acciones completas del backend
  */
 export const getStocks = async (token: string) => {
+  const cacheKey = `stocks_${token.substring(0, 10)}`;
+  
+  // Verificar cache primero
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
   const url = urlWebServices.getStocks;
+  console.log('📈 [STOCKS] Obteniendo stocks del backend');
 
   try {
-    const response = await fetch(url, {
+    const response = await makeRequestWithRetry(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -777,11 +834,17 @@ export const getStocks = async (token: string) => {
     }
 
     const data = await response.json();
-    return {
+    const result = {
       stocks: data.data.stocks,
       count: data.data.count,
       message: data.message
     };
+    
+    // Guardar en cache
+    saveToCache(cacheKey, result, CACHE_DURATION.STOCKS);
+    console.log('✅ [STOCKS] Stocks obtenidos correctamente:', { count: result.count });
+    
+    return result;
   } catch (error) {
     console.error('❌ Error en getStocks:', error);
     throw error;
@@ -794,11 +857,19 @@ export const getStocks = async (token: string) => {
  * @returns {Promise} Lista de símbolos favoritos del usuario
  */
 export const getUserFavorites = async (token: string) => {
+  const cacheKey = `favorites_${token.substring(0, 10)}`;
+  
+  // Verificar cache primero
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
   const url = urlWebServices.getUserFavorites;
   console.log('⭐ [FAVORITES] Obteniendo lista de favoritos del usuario');
 
   try {
-    const response = await fetch(url, {
+    const response = await makeRequestWithRetry(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -845,11 +916,16 @@ export const getUserFavorites = async (token: string) => {
     }
 
     const data = await response.json();
-    console.log('✅ [FAVORITES] Favoritos obtenidos correctamente:', { count: Object.keys(data.data.preferences || {}).length });
-    return {
+    const result = {
       favorites: data.data.preferences || {},
       message: data.message
     };
+    
+    // Guardar en cache
+    saveToCache(cacheKey, result, CACHE_DURATION.FAVORITES);
+    console.log('✅ [FAVORITES] Favoritos obtenidos correctamente:', { count: Object.keys(result.favorites || {}).length });
+    
+    return result;
   } catch (error) {
     console.error('❌ Error en getUserFavorites:', error);
     throw error;
@@ -1473,19 +1549,22 @@ const getChatFallbackResponse = (message: string): string => {
 /**
  * Helper para manejar rate limiting con reintentos
  */
-const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetries: number = 2): Promise<Response> => {
+const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetries: number = 1): Promise<Response> => {
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      // Agregar delay progresivo entre intentos
+      // Agregar delay progresivo entre intentos - más conservador
       if (attempt > 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 2), 5000); // Exponential backoff, máx 5s
+        const delay = Math.min(3000 * Math.pow(2, attempt - 2), 15000); // Exponential backoff, máx 15s
+        console.log(`🔄 [RETRY] Intento ${attempt}, esperando ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
       const response = await fetch(url, options);
       
-      // Si es rate limit (429), intentar nuevamente
+      // Si es rate limit (429), esperar más tiempo antes de reintentar
       if (response.status === 429 && attempt <= maxRetries) {
+        console.log(`⏳ [RATE_LIMIT] HTTP 429 detectado, esperando antes de reintentar...`);
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Esperar 10 segundos
         continue;
       }
       

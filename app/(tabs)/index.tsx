@@ -11,16 +11,33 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// Interfaz para noticias del backend
+// Interfaz para noticias del backend - usando nombres reales de la API
 interface BackendNewsItem {
-  _id: string;
-  titulo: string;
-  resumen: string;
-  contenido: string;
-  empresas_merval: string[];
-  fecha_scrapeo: string;
-  fecha_publicacion_raw?: string;
-  url: string;
+  _id?: string;
+  id?: string;
+  // Campos reales del backend
+  title?: string;
+  summary?: string;
+  content?: string;
+  mervalSymbol?: string[];
+  scrapingDate?: string;
+  publicationDate?: string;
+  url?: string;
+  // Campos opcionales alternativos por compatibilidad
+  titulo?: string;
+  resumen?: string;
+  contenido?: string;
+  empresas_merval?: string[];
+  fecha_scrapeo?: string;
+  headline?: string;
+  description?: string;
+  body?: string;
+  companies?: string[];
+  related_companies?: string[];
+  date?: string;
+  createdAt?: string;
+  publishedAt?: string;
+  link?: string;
 }
 
 const StockItem = ({ stock }: { stock: Stock }) => {
@@ -109,26 +126,58 @@ const NewsCard = ({
   if (isBackendNews) {
     const backendNews = news as BackendNewsItem;
     
-    const formatTimeAgo = (dateString: string) => {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-      
-      if (diffInHours < 1) return 'Ahora';
-      if (diffInHours < 24) return `${diffInHours}h`;
-      return `${Math.floor(diffInHours / 24)}d`;
+    // Helper functions para extraer datos - priorizando campos reales del backend
+    const getTitle = (backendNews: BackendNewsItem): string => {
+      return backendNews.title || backendNews.titulo || backendNews.headline || 'Título no disponible';
+    };
+
+    const getContent = (backendNews: BackendNewsItem): string => {
+      return backendNews.summary || backendNews.content || backendNews.resumen || backendNews.contenido || backendNews.description || backendNews.body || 'Contenido no disponible';
+    };
+
+    const getDate = (backendNews: BackendNewsItem): string => {
+      return backendNews.scrapingDate || backendNews.publicationDate || backendNews.fecha_scrapeo || backendNews.date || backendNews.createdAt || backendNews.publishedAt || '';
+    };
+
+    const getCompanies = (backendNews: BackendNewsItem): string[] => {
+      return backendNews.mervalSymbol || backendNews.empresas_merval || backendNews.companies || backendNews.related_companies || [];
+    };
+    
+    const formatTimeAgo = (dateString: string | undefined) => {
+      try {
+        if (!dateString) return 'Fecha no disponible';
+        
+        const date = new Date(dateString);
+        
+        // Verificar si la fecha es válida
+        if (isNaN(date.getTime())) {
+          return 'Fecha inválida';
+        }
+        
+        const now = new Date();
+        const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+        
+        if (diffInHours < 1) return 'Ahora';
+        if (diffInHours < 24) return `${diffInHours}h`;
+        return `${Math.floor(diffInHours / 24)}d`;
+      } catch (error) {
+        console.warn('Error formateando fecha:', error);
+        return 'Fecha inválida';
+      }
     };
 
     const getCategoryIcon = () => {
       // Determinar categoría basada en empresas MERVAL
-      if (backendNews.empresas_merval && backendNews.empresas_merval.length > 0) {
+      const companies = getCompanies(backendNews);
+      if (companies && Array.isArray(companies) && companies.length > 0) {
         return 'business-outline';
       }
       return 'newspaper-outline';
     };
 
     const getCategoryColor = () => {
-      if (backendNews.empresas_merval && backendNews.empresas_merval.length > 0) {
+      const companies = getCompanies(backendNews);
+      if (companies && Array.isArray(companies) && companies.length > 0) {
         return '#4A9EFF'; // Azul para empresas
       }
       return colors.tint;
@@ -152,23 +201,26 @@ const NewsCard = ({
             />
           </View>
           <Text style={[styles.newsTimestamp, { color: colors.subtitle }]}>
-            {formatTimeAgo(backendNews.fecha_scrapeo)}
+            {formatTimeAgo(getDate(backendNews))}
           </Text>
-          {backendNews.empresas_merval && backendNews.empresas_merval.length > 0 && (
-            <View style={[styles.relatedStock, { backgroundColor: colors.tint + '15' }]}>
-              <Text style={[styles.relatedStockText, { color: colors.tint }]}>
-                {backendNews.empresas_merval[0]}
-              </Text>
-            </View>
-          )}
+          {(() => {
+            const companies = getCompanies(backendNews);
+            return companies && Array.isArray(companies) && companies.length > 0 && (
+              <View style={[styles.relatedStock, { backgroundColor: colors.tint + '15' }]}>
+                <Text style={[styles.relatedStockText, { color: colors.tint }]}>
+                  {companies[0] || 'MERVAL'}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
         <Text style={[styles.newsTitle, { color: colors.text }]}>
-          {backendNews.titulo}
+          {getTitle(backendNews)}
         </Text>
         <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.7}>
           <Text style={[styles.newsSummary, { color: colors.subtitle }]}>
             {(() => {
-              const content = backendNews.resumen || backendNews.contenido;
+              const content = getContent(backendNews);
               if (isExpanded) {
                 return content;
               } else {
@@ -176,11 +228,14 @@ const NewsCard = ({
               }
             })()}
           </Text>
-          {((backendNews.resumen || backendNews.contenido).length > 150) && (
-            <Text style={[styles.expandText, { color: colors.tint }]}>
-              {isExpanded ? 'Ver menos' : 'Ver más'}
-            </Text>
-          )}
+          {(() => {
+            const content = getContent(backendNews);
+            return content.length > 150 && (
+              <Text style={[styles.expandText, { color: colors.tint }]}>
+                {isExpanded ? 'Ver menos' : 'Ver más'}
+              </Text>
+            );
+          })()}
         </TouchableOpacity>
         <View style={styles.newsFooter}>
           <View style={[styles.newsImpact, { backgroundColor: '#64748b' + '15' }]}>
@@ -224,13 +279,26 @@ const NewsCard = ({
   };
 
   const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return 'Ahora';
-    if (diffInHours < 24) return `${diffInHours}h`;
-    return `${Math.floor(diffInHours / 24)}d`;
+    try {
+      if (!dateString) return 'Fecha no disponible';
+      
+      const date = new Date(dateString);
+      
+      // Verificar si la fecha es válida
+      if (isNaN(date.getTime())) {
+        return 'Fecha inválida';
+      }
+      
+      const now = new Date();
+      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+      
+      if (diffInHours < 1) return 'Ahora';
+      if (diffInHours < 24) return `${diffInHours}h`;
+      return `${Math.floor(diffInHours / 24)}d`;
+    } catch (error) {
+      console.warn('Error formateando fecha mock:', error);
+      return 'Fecha inválida';
+    }
   };
   
   return (
@@ -253,9 +321,9 @@ const NewsCard = ({
       <Text style={[styles.newsTitle, { color: colors.text }]}>{mockNews.title}</Text>
       <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.7}>
         <Text style={[styles.newsSummary, { color: colors.subtitle }]}>
-          {isExpanded ? mockNews.summary : (mockNews.summary.length > 150 ? mockNews.summary.substring(0, 150) + '...' : mockNews.summary)}
+          {isExpanded ? mockNews.summary : ((mockNews.summary || '').length > 150 ? (mockNews.summary || '').substring(0, 150) + '...' : mockNews.summary)}
         </Text>
-        {mockNews.summary.length > 150 && (
+        {(mockNews.summary || '').length > 150 && (
           <Text style={[styles.expandText, { color: colors.tint }]}>
             {isExpanded ? 'Ver menos' : 'Ver más'}
           </Text>
@@ -321,8 +389,11 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
       
+      // Delay inicial para evitar rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       // Load user's favorite stocks
-      if (isAuthenticated && userFavorites.length > 0) {
+      if (isAuthenticated && userFavorites && userFavorites.length > 0) {
         try {
           const token = await getStoredToken();
           if (token) {
@@ -369,6 +440,9 @@ export default function HomeScreen() {
         }
       }
       
+      // Delay adicional antes de cargar noticias
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       // Load news from backend with caching
       const now = Date.now();
       const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos
@@ -377,20 +451,100 @@ export default function HomeScreen() {
         try {
           const token = await getStoredToken();
           if (token) {
+            console.log('📰 [DEBUG] Iniciando llamada a getNews del backend...');
             const newsResponse = await getNews(token, 1, 5, 'fecha_scrapeo', 'desc');
             
+            console.log('📰 [DEBUG] Respuesta completa del backend:', {
+              success: newsResponse.success,
+              data: newsResponse.data,
+              message: newsResponse.message,
+              error: newsResponse.error
+            });
+            
             if (newsResponse.success && newsResponse.data?.news) {
-              setNews(newsResponse.data.news);
+              console.log('📰 [DEBUG] Noticias recibidas del backend:', {
+                count: newsResponse.data.news.length,
+                totalInResponse: newsResponse.data.total,
+                firstNewsRaw: JSON.stringify(newsResponse.data.news[0], null, 2),
+                firstNewsKeys: newsResponse.data.news[0] ? Object.keys(newsResponse.data.news[0]) : 'No keys',
+                firstNews: newsResponse.data.news[0] ? {
+                  id: newsResponse.data.news[0]._id,
+                  titulo: newsResponse.data.news[0].titulo,
+                  title: newsResponse.data.news[0].title, // Podría ser 'title' en lugar de 'titulo'
+                  resumen: newsResponse.data.news[0].resumen,
+                  summary: newsResponse.data.news[0].summary, // Podría ser 'summary' en lugar de 'resumen'
+                  contenido: newsResponse.data.news[0].contenido,
+                  content: newsResponse.data.news[0].content, // Podría ser 'content' en lugar de 'contenido'
+                  hasResumen: !!newsResponse.data.news[0].resumen,
+                  hasContenido: !!newsResponse.data.news[0].contenido,
+                  empresas: newsResponse.data.news[0].empresas_merval,
+                  companies: newsResponse.data.news[0].companies, // Podría ser otro nombre
+                  fecha_scrapeo: newsResponse.data.news[0].fecha_scrapeo,
+                  date: newsResponse.data.news[0].date, // Podría ser otro campo de fecha
+                  createdAt: newsResponse.data.news[0].createdAt
+                } : 'No hay noticias',
+                allNews: newsResponse.data.news.map((n: any) => ({ 
+                  id: n._id, 
+                  titulo: n.titulo, 
+                  title: n.title,
+                  hasContent: !!(n.resumen || n.contenido || n.summary || n.content),
+                  allKeys: Object.keys(n)
+                }))
+              });
+              
+              // Filtrar noticias que tengan datos mínimos válidos - versión flexible
+              const validNews = newsResponse.data.news.filter((news: any) => {
+                // Buscar título en diferentes posibles campos
+                const title = news.titulo || news.title || news.headline || news.name;
+                // Buscar contenido en diferentes posibles campos  
+                const content = news.resumen || news.contenido || news.summary || news.content || news.description || news.body;
+                
+                const isValid = news && title && content;
+                if (!isValid) {
+                  console.log('🚫 [DEBUG] Noticia inválida filtrada:', {
+                    id: news?._id || news?.id,
+                    titulo: news?.titulo,
+                    title: news?.title,
+                    headline: news?.headline,
+                    hasResumen: !!news?.resumen,
+                    hasContenido: !!news?.contenido,
+                    hasSummary: !!news?.summary,
+                    hasContent: !!news?.content,
+                    hasDescription: !!news?.description,
+                    allKeys: Object.keys(news || {})
+                  });
+                }
+                return isValid;
+              });
+              
+              console.log('[DEBUG] Noticias válidas filtradas:', {
+                original: newsResponse.data.news.length,
+                filtered: validNews.length,
+                validTitles: validNews.map((n: any) => n.title || n.titulo || n.headline)
+              });
+              
+              setNews(validNews);
               setNewsSource('backend');
               setLastNewsLoad(now);
             } else {
+              console.log('⚠️ [DEBUG] Respuesta del backend no válida:', {
+                success: newsResponse.success,
+                hasData: !!newsResponse.data,
+                hasNews: !!newsResponse.data?.news,
+                dataKeys: newsResponse.data ? Object.keys(newsResponse.data) : 'No data',
+                error: newsResponse.error
+              });
               throw new Error(newsResponse.error || 'Error obteniendo noticias del backend');
             }
           } else {
             throw new Error('No token available');
           }
         } catch (error) {
-          console.error('Error loading backend news, using fallback:', error);
+          console.error('🚫 [DEBUG] Error loading backend news, usando fallback:', {
+            error: error,
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            errorStack: error instanceof Error ? error.stack : 'No stack'
+          });
           // Fallback a datos mock
           const newsData = await NewsService.getNews(5);
           setNews(newsData);
@@ -412,6 +566,15 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
+      // Log final del estado de noticias
+      console.log('📊 [DEBUG] Estado final de noticias:', {
+        newsLength: news.length,
+        newsSource: newsSource,
+        isLoading: false,
+        displayedNewsLength: displayedNews.length,
+        firstNewsTitle: news[0] ? (newsSource === 'backend' ? (news[0] as BackendNewsItem).titulo : (news[0] as MockNewsItem).title) : 'No news'
+      });
+      
       setIsLoading(false);
     }
   }, [isAuthenticated, user, userFavorites, lastNewsLoad]);
@@ -429,7 +592,7 @@ export default function HomeScreen() {
 
   // Recargar stocks cuando cambien los favoritos
   useEffect(() => {
-    if (isAuthenticated && userFavorites && userFavorites.length > 0) {
+    if (isAuthenticated && userFavorites && Array.isArray(userFavorites) && userFavorites.length > 0) {
       const reloadStockData = async () => {
         try {
           // Intentar cargar desde backend primero
@@ -463,7 +626,7 @@ export default function HomeScreen() {
         }
       };
       reloadStockData();
-    } else if (userFavorites && userFavorites.length === 0) {
+    } else if (userFavorites && Array.isArray(userFavorites) && userFavorites.length === 0) {
       setUserStocks([]);
     }
   }, [userFavorites, isAuthenticated]);
@@ -477,8 +640,8 @@ export default function HomeScreen() {
     }, [refreshFavorites])
   );
   
-  const displayedStocks = showAllStocks ? userStocks : userStocks.slice(0, 3);
-  const displayedNews = showAllNews ? news : news.slice(0, 2);
+  const displayedStocks = showAllStocks ? (userStocks || []) : (userStocks || []).slice(0, 3);
+  const displayedNews = showAllNews ? (news || []) : (news || []).slice(0, 2);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('es-AR').format(num);
@@ -494,6 +657,18 @@ export default function HomeScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.tint} />
           <Text style={[styles.loadingText, { color: colors.text }]}>Cargando datos del mercado...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Protección temprana para prevenir errores durante inicialización
+  if (!userFavorites || !Array.isArray(userFavorites)) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingContainer, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <Text style={[{ color: colors.text, marginTop: 10 }]}>Inicializando...</Text>
         </View>
       </SafeAreaView>
     );
@@ -535,28 +710,36 @@ export default function HomeScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Noticias</Text>
         </View>
         
-        {displayedNews.map((newsItem, index) => {
-          const newsId = newsSource === 'backend' ? (newsItem as BackendNewsItem)._id || `news-${index}` : (newsItem as MockNewsItem).id;
-          return (
-            <View key={newsId} style={{ paddingHorizontal: 16 }}>
-              <NewsCard 
-                news={newsItem} 
-                isBackendNews={newsSource === 'backend'} 
-                isExpanded={expandedNews.has(newsId)}
-                onToggleExpand={() => toggleNewsExpansion(newsId)}
-              />
-            </View>
-          );
-        })}
+        {displayedNews && displayedNews.length > 0 ? (
+          displayedNews.map((newsItem, index) => {
+            const newsId = newsSource === 'backend' ? (newsItem as BackendNewsItem)._id || `news-${index}` : (newsItem as MockNewsItem).id;
+            return (
+              <View key={newsId} style={{ paddingHorizontal: 16 }}>
+                <NewsCard 
+                  news={newsItem} 
+                  isBackendNews={newsSource === 'backend'} 
+                  isExpanded={expandedNews.has(newsId)}
+                  onToggleExpand={() => toggleNewsExpansion(newsId)}
+                />
+              </View>
+            );
+          })
+        ) : (
+          <View style={{ paddingHorizontal: 16, paddingVertical: 20 }}>
+            <Text style={[{ color: colors.subtitle, textAlign: 'center' }]}>
+              {isLoading ? 'Cargando noticias...' : 'No hay noticias disponibles'}
+            </Text>
+          </View>
+        )}
         
-        {news.length > 2 && (
+        {news && news.length > 2 && (
           <View style={{ paddingHorizontal: 16 }}>
             <TouchableOpacity 
               style={[styles.showMoreButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
               onPress={() => setShowAllNews(!showAllNews)}
             >
               <Text style={[styles.showMoreText, { color: colors.text }]}>
-                {showAllNews ? `Ver menos` : `Ver ${news.length - 2} noticias más`}
+                {showAllNews ? `Ver menos` : `Ver ${(news?.length || 0) - 2} noticias más`}
               </Text>
               <Ionicons 
                 name={showAllNews ? "chevron-up" : "chevron-down"} 
@@ -579,19 +762,19 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
         
-        {displayedStocks.length > 0 ? (
+        {displayedStocks && displayedStocks.length > 0 ? (
           <>
             {displayedStocks.map((stock) => (
               <StockItem key={stock.id} stock={stock} />
             ))}
             
-            {userStocks.length > 3 && (
+            {userStocks && userStocks.length > 3 && (
               <TouchableOpacity 
                 style={[styles.showMoreButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 onPress={() => setShowAllStocks(!showAllStocks)}
               >
                 <Text style={[styles.showMoreText, { color: colors.text }]}>
-                  {showAllStocks ? `Ver menos` : `Ver ${userStocks.length - 3} más`}
+                  {showAllStocks ? `Ver menos` : `Ver ${(userStocks?.length || 0) - 3} más`}
                 </Text>
                 <Ionicons 
                   name={showAllStocks ? "chevron-up" : "chevron-down"} 
