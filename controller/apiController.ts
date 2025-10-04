@@ -933,6 +933,54 @@ export const getUserFavorites = async (token: string) => {
 };
 
 /**
+ * Obtiene las alertas del sistema
+ * @returns {Promise} Lista de alertas activas
+ */
+export const getAlerts = async () => {
+  const cacheKey = 'alerts_all';
+  
+  // Verificar cache primero
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
+  const url = urlWebServices.getAlerts;
+  console.log('🔔 [ALERTS] Obteniendo alertas del sistema');
+
+  try {
+    const response = await makeRequestWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Transformar fechas de string a Date
+    const alerts = data.map((alert: any) => ({
+      ...alert,
+      createdAt: new Date(alert.createdAt),
+      lastTriggered: alert.lastTriggered ? new Date(alert.lastTriggered) : undefined,
+    }));
+    
+    // Guardar en cache (30 segundos para alertas)
+    saveToCache(cacheKey, alerts, 30000);
+    console.log(`✅ [ALERTS] ${alerts.length} alertas obtenidas correctamente`);
+    
+    return alerts;
+  } catch (error) {
+    console.error('❌ Error en getAlerts:', error);
+    throw error;
+  }
+};
+
+/**
  * Agrega una acción específica a favoritos
  * @param {string} symbol - Símbolo de la acción (ej: "GGAL")
  * @param {string} token - JWT token del usuario

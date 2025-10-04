@@ -1,5 +1,6 @@
 const urlApi = 'http://192.168.0.195:8080/'; // Para desarrollo con IP local actual
 const chatApi = 'http://192.168.0.195:8084/'; // Chat Service
+const alertsApi = 'http://192.168.0.195:8000/'; // Alerts Service
 //const chatApi = 'http://localhost:8084/';
 //const urlApi = 'http://localhost:8080/'; // Para desarrollo (no funciona en React Native)
 //const urlApi = 'http://10.0.2.2:8080/'; // Para Android Emulator
@@ -45,6 +46,9 @@ const urlWebServices = {
   chatVerifyAuth: urlApi + 'api/auth/verify',
   chatSendMessage: chatApi + 'api/chat/message',
   chatGetHistory: chatApi + 'api/chat/history', // + /:userId?limit=50
+  
+  // 🔔 Alerts Endpoints
+  getAlerts: alertsApi + 'alerts',
 };
 
 export default urlWebServices;
