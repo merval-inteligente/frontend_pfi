@@ -1,3 +1,4 @@
+import { getBottomPaddingForTabBar, getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
@@ -8,14 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface StockItem {
@@ -600,7 +601,11 @@ export default function PreferencesScreen() {
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: getBottomPaddingForTabBar() }}
+      >
         {loading ? (
           <View style={styles.loadingState}>
             <Ionicons name="hourglass-outline" size={48} color={colors.subtitle} />
@@ -717,7 +722,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 70,
+    paddingTop: getHeaderPaddingTop(),
     paddingBottom: 16,
     justifyContent: 'center',
   },

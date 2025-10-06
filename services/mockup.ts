@@ -8,7 +8,12 @@ import { User } from './mockData';
 export interface PersonalInfo {
   name: string;
   email: string;
+  phone?: string;
+  birthDate?: string;
+  occupation?: string;
+  address?: string;
   document: string;
+  nationality?: string;
   avatar: string;
   investmentKnowledge?: string;
   riskAppetite?: string;
@@ -93,9 +98,34 @@ export interface Alert {
   id: string;
   title: string;
   description: string;
-  type: 'price' | 'news' | 'portfolio';
+  type: 'price' | 'news' | 'portfolio' | 'volume' | 'technical';
   enabled: boolean;
   icon: string;
+  config?: {
+    symbol?: string;
+    condition?: string;
+    threshold?: number;
+    timeframe?: string;
+  };
+  createdAt?: Date | string;
+  lastTriggered?: Date | string;
+  triggerCount?: number;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  metadata?: {
+    content_type?: string;
+    author?: string;
+    engagement?: number;
+    retweets?: number;
+    likes?: number;
+    tickers?: string[];
+    hashtags?: string[];
+    category?: string;
+    source?: string;
+    url?: string;
+  };
+  keywords?: string[];
+  sourceTitle?: string;
+  sourceId?: string;
 }
 
 export interface ChatMessage {

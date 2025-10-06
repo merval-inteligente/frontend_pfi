@@ -1,3 +1,4 @@
+import { getBottomPaddingForTabBar, getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -7,14 +8,14 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 interface ProfileOption {
   id: string;
@@ -304,7 +305,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { height: getBottomPaddingForTabBar() }]} />
       </ScrollView>
 
       {/* Modal Acerca de */}
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingTop: 70,
+    paddingTop: getHeaderPaddingTop(),
   },
   headerTitle: {
     fontSize: 18,
@@ -463,6 +464,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   bottomSpacing: {
+    // Este height se sobrescribe dinámicamente en el JSX
     height: 32,
   },
   // Estilos de modales

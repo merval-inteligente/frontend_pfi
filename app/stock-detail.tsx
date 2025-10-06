@@ -1,3 +1,4 @@
+import { getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ExtendedStock, generateMockChartData, getExtendedStock } from '@/services/mockup';
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 60,
+    paddingTop: getHeaderPaddingTop(),
     borderBottomWidth: 1,
   },
   backButton: {

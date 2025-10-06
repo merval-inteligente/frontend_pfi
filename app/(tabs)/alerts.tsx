@@ -1,5 +1,6 @@
 import { AlertCreator } from '@/components/AlertCreator';
 import { AlertSuggestions } from '@/components/AlertSuggestions';
+import { getBottomPaddingForTabBar, getHeaderPaddingTop, ResponsiveContainer, useResponsivePadding } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -63,7 +64,7 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
         { 
           backgroundColor: colors.card,
           borderLeftWidth: 4,
-          borderLeftColor: alert.enabled ? getPriorityColor(alert.priority) : colors.cardBorder,
+          borderLeftColor: alert.enabled ? getPriorityColor(alert.priority || 'low') : colors.cardBorder,
           opacity: alert.enabled ? 1 : 0.6
         }
       ]}
@@ -73,19 +74,19 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
       {/* Header Row */}
       <View style={styles.alertHeader}>
         {/* Priority Icon */}
-        <View style={[styles.statusIndicator, { backgroundColor: `${getPriorityColor(alert.priority)}20` }]}>
+        <View style={[styles.statusIndicator, { backgroundColor: `${getPriorityColor(alert.priority || 'low')}20` }]}>
           <Ionicons 
-            name={getPriorityIcon(alert.priority) as any} 
+            name={getPriorityIcon(alert.priority || 'low') as any} 
             size={20} 
-            color={getPriorityColor(alert.priority)} 
+            color={getPriorityColor(alert.priority || 'low')} 
           />
         </View>
 
         {/* Title & Symbol */}
         <View style={styles.alertTitleRow}>
           {alert.config?.symbol && (
-            <View style={[styles.symbolBadge, { backgroundColor: `${getPriorityColor(alert.priority)}15` }]}>
-              <Text style={[styles.symbolText, { color: getPriorityColor(alert.priority) }]}>
+            <View style={[styles.symbolBadge, { backgroundColor: `${getPriorityColor(alert.priority || 'low')}15` }]}>
+              <Text style={[styles.symbolText, { color: getPriorityColor(alert.priority || 'low') }]}>
                 {alert.config.symbol}
               </Text>
             </View>
@@ -96,7 +97,7 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
         <TouchableOpacity 
           style={[
             styles.statusIndicator,
-            { backgroundColor: alert.enabled ? `${getPriorityColor(alert.priority)}15` : `${colors.subtitle}10` }
+            { backgroundColor: alert.enabled ? `${getPriorityColor(alert.priority || 'low')}15` : `${colors.subtitle}10` }
           ]}
           onPress={(e) => {
             e.stopPropagation();
@@ -107,7 +108,7 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
           <Ionicons 
             name={alert.enabled ? "notifications" : "notifications-off"} 
             size={18} 
-            color={alert.enabled ? getPriorityColor(alert.priority) : colors.subtitle} 
+            color={alert.enabled ? getPriorityColor(alert.priority || 'low') : colors.subtitle} 
           />
         </TouchableOpacity>
       </View>
@@ -130,7 +131,7 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
         </View>
 
         {/* Trigger Count */}
-        {alert.triggerCount > 0 && (
+        {alert.triggerCount !== undefined && alert.triggerCount > 0 && (
           <View style={styles.triggerBadge}>
             <Ionicons name="flash" size={12} color={colors.success} />
             <Text style={[styles.triggerCountText, { color: colors.success }]}>{alert.triggerCount}</Text>
@@ -186,8 +187,8 @@ export default function AlertsScreen() {
       
       // Ordenar por fecha de creación (más recientes primero)
       const sortedAlerts = alerts.sort((a: Alert, b: Alert) => {
-        const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt;
-        const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt;
+        const dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt) : new Date(0);
         return dateB.getTime() - dateA.getTime();
       });
       
@@ -259,10 +260,18 @@ export default function AlertsScreen() {
     return triggerDate.getTime() > weekAgo;
   }).length;
 
+  const responsivePadding = useResponsivePadding();
+  
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.cardBorder }]}>
+      <ResponsiveContainer>
+        {/* Header */}
+        <View style={[styles.header, { 
+          backgroundColor: colors.background, 
+          borderBottomColor: colors.cardBorder,
+          paddingHorizontal: responsivePadding.horizontal,
+          paddingTop: getHeaderPaddingTop()
+        }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Alertas</Text>
           <Text style={[styles.headerSubtitle, { color: colors.subtitle }]}>
@@ -481,7 +490,7 @@ export default function AlertsScreen() {
             )}
           </>
         )}
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { height: getBottomPaddingForTabBar() }]} />
       </ScrollView>
 
       {/* Modal de creación */}
@@ -491,6 +500,7 @@ export default function AlertsScreen() {
         onSave={handleSaveAlert}
         stocks={userFavorites}
       />
+      </ResponsiveContainer>
     </SafeAreaView>
   );
 }

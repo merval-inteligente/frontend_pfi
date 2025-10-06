@@ -1,3 +1,4 @@
+import { getBottomPaddingForTabBar, getHeaderPaddingTop, isDesktop, isWeb, ResponsiveContainer, useResponsivePadding } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
@@ -9,7 +10,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ImageBackground, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, ImageBackground, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_DESKTOP_SCREEN = SCREEN_WIDTH >= 1024;
 
 // Interfaz para noticias del backend - usando nombres reales de la API
 interface BackendNewsItem {
@@ -350,6 +354,7 @@ export default function HomeScreen() {
   const { user, isAuthenticated } = useAuth();
   const { userFavorites, refreshFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
+  const responsivePadding = useResponsivePadding();
   
   const [userStocks, setUserStocks] = useState<Stock[]>([]);
   const [news, setNews] = useState<(MockNewsItem | BackendNewsItem)[]>([]);
@@ -676,28 +681,49 @@ export default function HomeScreen() {
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Inicio</Text>
-        </View>
+      <ResponsiveContainer>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={[styles.header, {
+            paddingHorizontal: responsivePadding.horizontal,
+            paddingTop: getHeaderPaddingTop()
+          }]}>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Inicio</Text>
+              {isDesktop() && (
+                <Text style={[styles.headerSubtitle, { color: colors.subtitle, marginTop: 4 }]}>
+                  Panel de control de mercados
+                </Text>
+              )}
+            </View>
+          </View>
 
-        {/* Greeting */}
-        <Text style={[styles.greeting, { color: colors.text }]}>
-          ¡Hola {user?.name || 'Usuario'}! ¿Cómo anda el mercado hoy?
-        </Text>
+          {/* Greeting */}
+          <Text style={[styles.greeting, { 
+            color: colors.text,
+            paddingHorizontal: responsivePadding.horizontal,
+            fontSize: IS_DESKTOP_SCREEN ? 20 : 18
+          }]}>
+            ¡Hola {user?.name || 'Usuario'}! ¿Cómo anda el mercado hoy?
+          </Text>
 
         {/* MERVAL Card */}
-        <View style={styles.mervalContainer}>
+        <View style={[styles.mervalContainer, {
+          marginHorizontal: responsivePadding.horizontal,
+        }]}>
           <ImageBackground
             source={{
               uri: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80'
             }}
-            style={styles.mervalBackground}
+            style={[styles.mervalBackground, {
+              height: IS_DESKTOP_SCREEN ? 160 : 120
+            }]}
             imageStyle={styles.mervalBackgroundImage}
           >
             <View style={styles.mervalOverlay}>
-              <Text style={styles.mervalText}>
+              <Text style={[styles.mervalText, {
+                fontSize: IS_DESKTOP_SCREEN ? 28 : 20
+              }]}>
                 MERVAL: {marketData ? formatNumber(marketData.mervalIndex.value) : '1.567.234'} 
                 {marketData ? ` (${formatPercentage(marketData.mervalIndex.percentageChange)})` : ' (+2,34%)'} 📈
               </Text>
@@ -706,26 +732,43 @@ export default function HomeScreen() {
         </View>
 
         {/* News Section */}
-        <View style={styles.exploreSectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Noticias</Text>
+        <View style={[styles.exploreSectionHeader, {
+          paddingHorizontal: responsivePadding.horizontal
+        }]}>
+          <Text style={[styles.sectionTitle, { 
+            color: colors.text,
+            fontSize: IS_DESKTOP_SCREEN ? 24 : 20
+          }]}>Noticias del Mercado</Text>
+          {IS_DESKTOP_SCREEN && displayedNews && displayedNews.length > 0 && (
+            <Text style={[styles.sectionSubtitle, { color: colors.subtitle }]}>
+              {displayedNews.length} artículo{displayedNews.length !== 1 ? 's' : ''}
+            </Text>
+          )}
         </View>
         
         {displayedNews && displayedNews.length > 0 ? (
-          displayedNews.map((newsItem, index) => {
-            const newsId = newsSource === 'backend' ? (newsItem as BackendNewsItem)._id || `news-${index}` : (newsItem as MockNewsItem).id;
-            return (
-              <View key={newsId} style={{ paddingHorizontal: 16 }}>
-                <NewsCard 
-                  news={newsItem} 
-                  isBackendNews={newsSource === 'backend'} 
-                  isExpanded={expandedNews.has(newsId)}
-                  onToggleExpand={() => toggleNewsExpansion(newsId)}
-                />
-              </View>
-            );
-          })
+          <View style={[
+            IS_DESKTOP_SCREEN && styles.newsGrid,
+            { paddingHorizontal: responsivePadding.horizontal }
+          ]}>
+            {displayedNews.map((newsItem, index) => {
+              const newsId = newsSource === 'backend' ? (newsItem as BackendNewsItem)._id || `news-${index}` : (newsItem as MockNewsItem).id;
+              return (
+                <View key={newsId} style={[
+                  IS_DESKTOP_SCREEN ? styles.newsGridItem : styles.newsListItem
+                ]}>
+                  <NewsCard 
+                    news={newsItem} 
+                    isBackendNews={newsSource === 'backend'} 
+                    isExpanded={expandedNews.has(newsId)}
+                    onToggleExpand={() => toggleNewsExpansion(newsId)}
+                  />
+                </View>
+              );
+            })}
+          </View>
         ) : (
-          <View style={{ paddingHorizontal: 16, paddingVertical: 20 }}>
+          <View style={{ paddingHorizontal: responsivePadding.horizontal, paddingVertical: 20 }}>
             <Text style={[{ color: colors.subtitle, textAlign: 'center' }]}>
               {isLoading ? 'Cargando noticias...' : 'No hay noticias disponibles'}
             </Text>
@@ -733,10 +776,15 @@ export default function HomeScreen() {
         )}
         
         {news && news.length > 2 && (
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: responsivePadding.horizontal }}>
             <TouchableOpacity 
-              style={[styles.showMoreButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              style={[styles.showMoreButton, { 
+                backgroundColor: colors.card, 
+                borderColor: colors.cardBorder,
+                ...(isWeb() && Platform.OS === 'web' && { cursor: 'pointer' })
+              }]}
               onPress={() => setShowAllNews(!showAllNews)}
+              activeOpacity={0.7}
             >
               <Text style={[styles.showMoreText, { color: colors.text }]}>
                 {showAllNews ? `Ver menos` : `Ver ${(news?.length || 0) - 2} noticias más`}
@@ -751,10 +799,20 @@ export default function HomeScreen() {
         )}
 
         {/* Stocks Section */}
-        <View style={styles.exploreSectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Mis Preferencias</Text>
+        <View style={[styles.exploreSectionHeader, {
+          paddingHorizontal: responsivePadding.horizontal
+        }]}>
+          <Text style={[styles.sectionTitle, { 
+            color: colors.text,
+            paddingHorizontal: 0,
+            fontSize: IS_DESKTOP_SCREEN ? 24 : 20
+          }]}>Mis Preferencias</Text>
           <TouchableOpacity 
-            style={[styles.editPreferencesButton, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+            style={[styles.editPreferencesButton, { 
+              backgroundColor: colors.card, 
+              borderColor: colors.cardBorder,
+              ...(isWeb() && Platform.OS === 'web' && { cursor: 'pointer' })
+            }]}
             onPress={() => router.push('/(tabs)/preferences')}
           >
             <Ionicons name="settings-outline" size={16} color={colors.text} />
@@ -801,20 +859,38 @@ export default function HomeScreen() {
         )}
 
         {/* Market Sentiment */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Sentimiento del Mercado</Text>
-        <View style={styles.sentimentContainer}>
-          <View style={styles.sentimentTextContainer}>
-            <Text style={[styles.sentimentTitle, { color: colors.text }]}>
+        <Text style={[styles.sectionTitle, { 
+          color: colors.text,
+          paddingHorizontal: responsivePadding.horizontal,
+          fontSize: IS_DESKTOP_SCREEN ? 24 : 20
+        }]}>Sentimiento del Mercado</Text>
+        <View style={[styles.sentimentContainer, {
+          marginHorizontal: responsivePadding.horizontal,
+          flexDirection: IS_DESKTOP_SCREEN ? 'row' : 'column',
+        }]}>
+          <View style={[styles.sentimentTextContainer, {
+            flex: IS_DESKTOP_SCREEN ? 2 : 1
+          }]}>
+            <Text style={[styles.sentimentTitle, { 
+              color: colors.text,
+              fontSize: IS_DESKTOP_SCREEN ? 20 : 16
+            }]}>
               {marketData?.mervalIndex.percentageChange && marketData.mervalIndex.percentageChange > 0 ? 'Optimista' : 'Cauteloso'}
             </Text>
-            <Text style={[styles.sentimentDescription, { color: colors.subtitle }]}>
+            <Text style={[styles.sentimentDescription, { 
+              color: colors.subtitle,
+              fontSize: IS_DESKTOP_SCREEN ? 16 : 14
+            }]}>
               {marketData?.mervalIndex.percentageChange && marketData.mervalIndex.percentageChange > 0 
                 ? 'El mercado muestra una tendencia positiva generalizada.'
                 : 'El mercado presenta volatilidad, mantente informado.'
               }
             </Text>
           </View>
-          <View style={styles.sentimentImageContainer}>
+          <View style={[styles.sentimentImageContainer, {
+            flex: IS_DESKTOP_SCREEN ? 1 : undefined,
+            marginTop: IS_DESKTOP_SCREEN ? 0 : 12
+          }]}>
             <Image
               source={{
                 uri: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
@@ -826,18 +902,28 @@ export default function HomeScreen() {
         </View>
 
         {/* Chat Button */}
-        <View style={styles.chatButtonContainer}>
+        <View style={[styles.chatButtonContainer, {
+          paddingHorizontal: responsivePadding.horizontal,
+          alignItems: IS_DESKTOP_SCREEN ? 'center' : 'stretch',
+        }]}>
           <TouchableOpacity 
-            style={[styles.chatButton, { backgroundColor: colors.success }]}
+            style={[styles.chatButton, { 
+              backgroundColor: colors.success,
+              ...(isWeb() && Platform.OS === 'web' && { cursor: 'pointer' }),
+              alignSelf: IS_DESKTOP_SCREEN ? 'center' : 'stretch',
+              maxWidth: IS_DESKTOP_SCREEN ? 400 : undefined,
+            }]}
             onPress={() => router.push('/chat')}
+            activeOpacity={0.8}
           >
             <Ionicons name="chatbubbles-outline" size={24} color={colorScheme === 'dark' ? '#131612' : '#ffffff'} />
-            <Text style={[styles.chatButtonText, { color: colorScheme === 'dark' ? '#131612' : '#ffffff' }]}>Preguntale a Guía MERVAL</Text>
+            <Text style={[styles.chatButtonText, { color: colorScheme === 'dark' ? '#131612' : '#ffffff' }]}>Pregúntale a Guía MERVAL</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { height: getBottomPaddingForTabBar() }]} />
       </ScrollView>
+      </ResponsiveContainer>
     </SafeAreaView>
   );
 }
@@ -1043,21 +1129,27 @@ const styles = StyleSheet.create({
   chatButtonContainer: {
     paddingHorizontal: 16,
     paddingVertical: 20,
-    alignItems: 'flex-end',
   },
   chatButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     borderRadius: 28,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   chatButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
   },
   bottomSpacing: {
+    // Este height se sobrescribe dinámicamente en el JSX
     height: 20,
   },
   // Estilos para headers de sección
@@ -1179,5 +1271,30 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  
+  // Web-specific styles
+  headerSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  newsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 16,
+  },
+  newsGridItem: {
+    width: '48%',
+    minWidth: 300,
+  },
+  newsListItem: {
+    width: '100%',
+    marginBottom: 12,
   },
 });

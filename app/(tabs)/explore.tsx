@@ -1,3 +1,4 @@
+import { getBottomPaddingForTabBar, getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
 import { MervalStock, getDefaultMervalStocks, getStockSectors } from '@/services/mockup';
@@ -5,14 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 export default function ExploreScreen() {
@@ -208,7 +209,11 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.stocksList} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.stocksList} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: getBottomPaddingForTabBar() }}
+      >
         {filteredStocks.length > 0 ? (
           <View style={styles.stocksGrid}>
             {filteredStocks.map((stock) => (
@@ -240,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 70,
+    paddingTop: getHeaderPaddingTop(),
     paddingBottom: 20,
   },
   backButton: {

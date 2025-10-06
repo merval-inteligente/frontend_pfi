@@ -1,3 +1,4 @@
+import { getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getContactInfo, helpCategories, mockFAQs } from '@/services/mockup';
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 70,
+    paddingTop: getHeaderPaddingTop(),
     paddingBottom: 20,
   },
   backButton: {

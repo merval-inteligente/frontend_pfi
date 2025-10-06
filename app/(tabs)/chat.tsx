@@ -1,3 +1,4 @@
+import { getBottomPaddingForTabBar, getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getChatHistory, initializeChatService, sendChatMessage, verifyChatAuth } from '@/controller/apiController';
@@ -5,15 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface ChatMessage {
@@ -342,7 +343,11 @@ export default function ChatScreen() {
           )}
         </ScrollView>
 
-        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.cardBorder }]}>
+        <View style={[styles.inputContainer, { 
+          backgroundColor: colors.card, 
+          borderTopColor: colors.cardBorder,
+          paddingBottom: getBottomPaddingForTabBar()
+        }]}>
           <TextInput
             style={[
               styles.textInput,
@@ -391,7 +396,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 12,
-    paddingTop: Platform.OS === 'ios' ? 65 : 50, // +10px más para separación perfecta
+    paddingTop: getHeaderPaddingTop(),
     borderBottomWidth: 1,
   },
   headerContent: {
@@ -502,6 +507,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
+    // paddingBottom se sobrescribe dinámicamente en el JSX
     borderTopWidth: 1,
     alignItems: 'flex-end',
   },

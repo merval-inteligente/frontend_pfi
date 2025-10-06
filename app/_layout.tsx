@@ -2,7 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { CustomSplashScreen } from '@/components/CustomSplashScreen';
@@ -12,6 +13,38 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 
 function RootLayoutContent() {
   const { colorScheme } = useTheme();
+  
+  // Apply web-specific body styles
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const body = document.body;
+      const html = document.documentElement;
+      
+      // Remove default margins and set full height
+      body.style.margin = '0';
+      body.style.padding = '0';
+      body.style.width = '100%';
+      body.style.height = '100vh';
+      body.style.overflow = 'hidden';
+      body.style.position = 'fixed';
+      
+      html.style.margin = '0';
+      html.style.padding = '0';
+      html.style.width = '100%';
+      html.style.height = '100vh';
+      html.style.overflow = 'hidden';
+      
+      // Disable text selection on web for better app-like feel
+      body.style.userSelect = 'none';
+      body.style.webkitUserSelect = 'none';
+      
+      // Smooth scrolling
+      html.style.scrollBehavior = 'smooth';
+      
+      // Prevent pull-to-refresh on mobile web
+      body.style.overscrollBehavior = 'none';
+    }
+  }, []);
   
   return (
     <NavigationThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

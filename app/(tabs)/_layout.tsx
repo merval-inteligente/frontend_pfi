@@ -1,11 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IS_WEB = Platform.OS === 'web';
+const IS_DESKTOP = SCREEN_WIDTH >= 1024;
 
 export default function TabLayout() {
   const { colorScheme } = useTheme();
@@ -22,9 +26,18 @@ export default function TabLayout() {
           backgroundColor: colors.card,
           borderTopColor: colors.cardBorder,
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 34 : 40,
+          paddingBottom: IS_WEB ? 8 : (Platform.OS === 'ios' ? 34 : 40),
           paddingTop: 8,
-          height: Platform.OS === 'ios' ? 88 : 92,
+          height: IS_WEB ? 60 : (Platform.OS === 'ios' ? 88 : 92),
+          ...(IS_WEB && IS_DESKTOP && {
+            maxWidth: 1200,
+            alignSelf: 'center',
+            width: '100%',
+            left: '50%',
+            transform: [{ translateX: '-50%' }],
+            position: 'absolute',
+            bottom: 0,
+          }),
         },
         tabBarLabelStyle: {
           fontSize: 12,
