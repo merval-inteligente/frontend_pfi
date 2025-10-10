@@ -1,10 +1,15 @@
-const urlApi = 'http://192.168.0.17:8080/'; // Para desarrollo con IP local actual
-const chatApi = 'http://192.168.0.17:8084/'; // Chat Service
-const alertsApi = 'http://192.168.0.17:8000/'; // Alerts Service
-//const chatApi = 'http://localhost:8084/';
-//const urlApi = 'http://localhost:8080/'; // Para desarrollo (no funciona en React Native)
-//const urlApi = 'http://10.0.2.2:8080/'; // Para Android Emulator
-// const urlApi = "http://[TU_IP_LOCAL]:8080/";  // Para dispositivos reales o iOS
+// ✅ API Gateway de AWS - Backend deployado
+const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
+
+// 🔧 URLs por servicio (todos apuntan al API Gateway)
+const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
+const chatApi = AWS_API_GATEWAY; // Chat Service (ruteado por API Gateway)
+const alertsApi = AWS_API_GATEWAY; // Alerts Service (ruteado por API Gateway)
+
+// 💡 Para desarrollo local, descomenta estas líneas:
+// const urlApi = 'http://192.168.0.17:8080/';
+// const chatApi = 'http://192.168.0.17:8084/';
+// const alertsApi = 'http://192.168.0.17:8000/';
 
 const urlWebServices = {
   // URL Base para verificaciones de conectividad
