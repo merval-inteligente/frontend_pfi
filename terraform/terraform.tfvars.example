@@ -1,0 +1,12 @@
+# Configuración de ejemplo para terraform.tfvars
+# Copia este archivo a terraform.tfvars y personaliza los valores
+
+# aws_region = "us-east-1"
+# bucket_name = "pfi-frontend-web-app-unique-name"
+# environment = "production"
+# cloudfront_price_class = "PriceClass_100"
+
+# tags = {
+#   Project = "PFI"
+#   Owner   = "Nicolas"
+# }
