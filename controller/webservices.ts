@@ -1,15 +1,15 @@
 // ✅ API Gateway de AWS - Backend deployado
-const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
+//const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
 
 // 🔧 URLs por servicio (todos apuntan al API Gateway)
-const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
-const chatApi = AWS_API_GATEWAY; // Chat Service (ruteado por API Gateway)
-const alertsApi = AWS_API_GATEWAY; // Alerts Service (ruteado por API Gateway)
+//const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
+//const chatApi = AWS_API_GATEWAY; // Chat Service (ruteado por API Gateway)
+//const alertsApi = AWS_API_GATEWAY; // Alerts Service (ruteado por API Gateway)
 
 // 💡 Para desarrollo local, descomenta estas líneas:
-// const urlApi = 'http://192.168.0.17:8080/';
-// const chatApi = 'http://192.168.0.17:8084/';
-// const alertsApi = 'http://192.168.0.17:8000/';
+ const urlApi = 'http://192.168.0.17:8080/';
+ const chatApi = 'http://192.168.0.17:8084/';
+ const alertsApi = 'http://192.168.0.17:8000/';
 
 const urlWebServices = {
   // URL Base para verificaciones de conectividad
@@ -45,6 +45,11 @@ const urlWebServices = {
   // 🗑️ Eliminar favoritos
   removeFavoriteStock: urlApi + 'api/user/preferences/stocks/favorite', // DELETE /:symbol
   removeFavoriteSector: urlApi + 'api/user/preferences/stocks/favorite/sector', // DELETE + body {sector}
+  
+  // 📊 MERVAL Index - Precio en tiempo real
+  getMervalPrice: urlApi + 'api/merval/price',
+  getStockPrice: urlApi + 'api/merval/stock/', // + symbol (ej: YPF, GGAL, etc.)
+  getStockTechnical: urlApi + 'api/merval/stock/', // + symbol/technical (RSI, SMA, soporte/resistencia)
   
   // 💬 Chat Service Endpoints
   chatHealth: chatApi + 'health',

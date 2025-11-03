@@ -1,15 +1,18 @@
-import { getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getStockPrice, getStocks, getStockTechnical } from '@/controller/apiController';
 import { ExtendedStock, generateMockChartData, getExtendedStock } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
+    Platform,
     SafeAreaView,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -25,6 +28,20 @@ export default function StockDetailScreen() {
   
   const [stock, setStock] = useState<ExtendedStock | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [additionalStats, setAdditionalStats] = useState<{
+    high?: number;
+    low?: number;
+    open?: number;
+    previousClose?: number;
+  }>({});
+  const [technicalData, setTechnicalData] = useState<{
+    rsi?: number;
+    rsiSignal?: string;
+    sma50?: number;
+    sma200?: number;
+    support1?: number;
+    resistance1?: number;
+  }>({});
 
   useEffect(() => {
     loadStockData();
@@ -33,11 +50,136 @@ export default function StockDetailScreen() {
   const loadStockData = async () => {
     try {
       if (typeof symbol === 'string') {
-        const stockData = getExtendedStock(symbol);
-        setStock(stockData);
+        console.error(`📊 [STOCK-DETAIL] Cargando datos para: ${symbol}`);
+        
+        // 🔄 PASO 1: Intentar obtener datos del backend PRIMERO
+        let backendStockData: any = null;
+        let priceData: any = null;
+        
+        try {
+          const token = await AsyncStorage.getItem('@auth_token');
+          
+          if (token) {
+            // Obtener la lista de stocks del backend para obtener nombre y sector
+            const stocksResponse = await getStocks(token);
+            
+            if (stocksResponse && stocksResponse.stocks) {
+              backendStockData = stocksResponse.stocks.find(
+                (s: any) => s.symbol === symbol || s.symbol === symbol.toUpperCase()
+              );
+              
+              if (backendStockData) {
+                console.error(`✅ [STOCK-DETAIL] Stock encontrado en backend:`, {
+                  symbol: backendStockData.symbol,
+                  name: backendStockData.name,
+                  sector: backendStockData.sector
+                });
+              } else {
+                console.error(`⚠️ [STOCK-DETAIL] Stock ${symbol} no encontrado en lista del backend`);
+              }
+            }
+            
+            // Obtener precio real del backend
+            priceData = await getStockPrice(symbol);
+            
+            if (priceData.success && priceData.data) {
+              console.error(`✅ [STOCK-DETAIL] Precio real obtenido:`, {
+                symbol,
+                price: priceData.data.price,
+                change: priceData.data.changePercent,
+                volume: priceData.data.volume,
+                high: priceData.data.high,
+                low: priceData.data.low
+              });
+              
+              // Guardar estadísticas adicionales
+              setAdditionalStats({
+                high: priceData.data.high,
+                low: priceData.data.low,
+                open: priceData.data.open,
+                previousClose: priceData.data.previousClose
+              });
+            }
+            
+            // 📊 Obtener análisis técnico (RSI, SMA, soporte/resistencia)
+            const technicalAnalysis = await getStockTechnical(symbol);
+            
+            if (technicalAnalysis.success && technicalAnalysis.data) {
+              console.error(`✅ [STOCK-DETAIL] Análisis técnico obtenido:`, {
+                symbol,
+                rsi: technicalAnalysis.data.indicators?.rsi,
+                rsiSignal: technicalAnalysis.data.indicators?.rsiSignal,
+                sma50: technicalAnalysis.data.movingAverages?.sma50
+              });
+              
+              setTechnicalData({
+                rsi: technicalAnalysis.data.indicators?.rsi,
+                rsiSignal: technicalAnalysis.data.indicators?.rsiSignal,
+                sma50: technicalAnalysis.data.movingAverages?.sma50,
+                sma200: technicalAnalysis.data.movingAverages?.sma200,
+                support1: technicalAnalysis.data.support?.level1,
+                resistance1: technicalAnalysis.data.resistance?.level1
+              });
+            } else {
+              console.error(`⚠️ [STOCK-DETAIL] No se pudo obtener análisis técnico`);
+            }
+          }
+        } catch (backendError) {
+          console.error(`⚠️ [STOCK-DETAIL] Error obteniendo datos del backend:`, backendError);
+        }
+        
+        // 🔄 PASO 2: Intentar obtener datos mock como complemento
+        const mockStockData = getExtendedStock(symbol);
+        
+        // 🔄 PASO 3: Combinar datos del backend con mock (prioridad: backend)
+        if (backendStockData || priceData?.success || mockStockData) {
+          // Calcular cambio diario
+          const dailyChange = priceData?.data?.previousClose 
+            ? priceData.data.price - priceData.data.previousClose 
+            : mockStockData?.dailyChange || 0;
+          
+          // Construir objeto de stock combinado
+          const combinedStock: ExtendedStock = {
+            // ID y símbolo
+            id: backendStockData?.symbol || mockStockData?.id || symbol,
+            symbol: symbol.toUpperCase(),
+            
+            // Información básica (prioridad: backend -> mock -> default)
+            name: backendStockData?.name || mockStockData?.name || symbol,
+            sector: backendStockData?.sector || mockStockData?.sector || 'Sin sector',
+            
+            // Precio y cambios (prioridad: backend real)
+            currentPrice: priceData?.data?.price || mockStockData?.currentPrice || 0,
+            dailyChange: dailyChange,
+            percentageChange: priceData?.data?.changePercent || mockStockData?.percentageChange || 0,
+            volume: priceData?.data?.volume || mockStockData?.volume || 0,
+            
+            // Estadísticas adicionales (solo mock por ahora)
+            marketCap: mockStockData?.marketCap || 0,
+            pe: mockStockData?.pe || 0,
+            dividend: mockStockData?.dividend || 0,
+            description: mockStockData?.description || `Información de ${backendStockData?.name || symbol}`,
+          };
+          
+          console.error(`✅ [STOCK-DETAIL] Stock combinado creado:`, {
+            symbol: combinedStock.symbol,
+            name: combinedStock.name,
+            price: combinedStock.currentPrice,
+            hasBackendData: !!backendStockData,
+            hasPriceData: !!priceData?.success,
+            hasMockData: !!mockStockData
+          });
+          
+          setStock(combinedStock);
+        } else {
+          // No se encontró en ningún lado
+          console.error(`❌ [STOCK-DETAIL] No se encontraron datos para: ${symbol}`);
+          setStock(null);
+        }
       }
     } catch (error) {
-      console.error('Error loading stock data:', error);
+      console.error('❌ [STOCK-DETAIL] Error loading stock data:', error);
+      setStock(null);
     } finally {
       setIsLoading(false);
     }
@@ -68,21 +210,30 @@ export default function StockDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{stock.symbol}</Text>
-          <TouchableOpacity style={styles.favoriteButton}>
-            <Ionicons name="heart-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+      <StatusBar 
+        barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.background}
+      />
+      
+      {/* Header Navigation */}
+      <View style={[styles.header, { 
+        borderBottomColor: colors.cardBorder,
+        backgroundColor: colors.background 
+      }]}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{stock.symbol}</Text>
+        <TouchableOpacity style={styles.favoriteButton}>
+          <Ionicons name="heart-outline" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
 
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Content */}
         <View style={styles.content}>
           {/* Stock Info */}
@@ -92,12 +243,14 @@ export default function StockDetailScreen() {
             
             <View style={styles.priceRow}>
               <Text style={[styles.currentPrice, { color: colors.text }]}>
-                ${stock.currentPrice}
+                ${stock.currentPrice ? stock.currentPrice.toLocaleString() : 'N/A'}
               </Text>
               <Text style={[styles.priceChange, { 
                 color: stock.percentageChange >= 0 ? '#10b981' : '#ef4444' 
               }]}>
-                {stock.percentageChange >= 0 ? '+' : ''}{stock.percentageChange.toFixed(2)}%
+                {stock.percentageChange !== null && stock.percentageChange !== undefined 
+                  ? `${stock.percentageChange >= 0 ? '+' : ''}${stock.percentageChange.toFixed(2)}%`
+                  : 'N/A'}
               </Text>
             </View>
           </View>
@@ -138,9 +291,41 @@ export default function StockDetailScreen() {
               <View style={styles.statItem}>
                 <Text style={[styles.statLabel, { color: colors.subtitle }]}>Volumen</Text>
                 <Text style={[styles.statValue, { color: colors.text }]}>
-                  {stock.volume.toLocaleString()}
+                  {stock.volume ? stock.volume.toLocaleString() : 'N/A'}
                 </Text>
               </View>
+              {additionalStats.high !== undefined && additionalStats.high !== null && (
+                <View style={styles.statItem}>
+                  <Text style={[styles.statLabel, { color: colors.subtitle }]}>Máximo del día</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    ${additionalStats.high.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+              {additionalStats.low !== undefined && additionalStats.low !== null && (
+                <View style={styles.statItem}>
+                  <Text style={[styles.statLabel, { color: colors.subtitle }]}>Mínimo del día</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    ${additionalStats.low.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+              {additionalStats.open !== undefined && additionalStats.open !== null && (
+                <View style={styles.statItem}>
+                  <Text style={[styles.statLabel, { color: colors.subtitle }]}>Apertura</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    ${additionalStats.open.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+              {additionalStats.previousClose !== undefined && additionalStats.previousClose !== null && (
+                <View style={styles.statItem}>
+                  <Text style={[styles.statLabel, { color: colors.subtitle }]}>Cierre anterior</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>
+                    ${additionalStats.previousClose.toLocaleString()}
+                  </Text>
+                </View>
+              )}
               <View style={styles.statItem}>
                 <Text style={[styles.statLabel, { color: colors.subtitle }]}>Cap. Mercado</Text>
                 <Text style={[styles.statValue, { color: colors.text }]}>
@@ -161,6 +346,105 @@ export default function StockDetailScreen() {
               </View>
             </View>
           </View>
+
+          {/* Technical Analysis - RSI */}
+          {technicalData.rsi !== undefined && (
+            <View style={[styles.technicalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Análisis Técnico</Text>
+              <Text style={[styles.technicalDescription, { color: colors.subtitle }]}>
+                Indicadores de análisis técnico basados en datos históricos
+              </Text>
+              
+              <View style={styles.technicalGrid}>
+                {/* RSI */}
+                <View style={styles.technicalItemFull}>
+                  <View style={styles.technicalHeader}>
+                    <Text style={[styles.technicalLabel, { color: colors.text }]}>RSI (14)</Text>
+                    <View style={styles.rsiContainer}>
+                      <Text style={[styles.rsiValue, { 
+                        color: technicalData.rsiSignal === 'OVERBOUGHT' ? '#ef4444' 
+                             : technicalData.rsiSignal === 'OVERSOLD' ? '#10b981' 
+                             : colors.text 
+                      }]}>
+                        {technicalData.rsi.toFixed(2)}
+                      </Text>
+                      {technicalData.rsiSignal && (
+                        <Text style={[styles.rsiSignal, { 
+                          color: technicalData.rsiSignal === 'OVERBOUGHT' ? '#ef4444' 
+                               : technicalData.rsiSignal === 'OVERSOLD' ? '#10b981' 
+                               : colors.subtitle,
+                          fontSize: 11,
+                          marginTop: 2
+                        }]}>
+                          {technicalData.rsiSignal === 'OVERBOUGHT' ? '🔴 Sobrecompra' 
+                           : technicalData.rsiSignal === 'OVERSOLD' ? '🟢 Sobreventa' 
+                           : '⚪ Neutral'}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                    Índice de Fuerza Relativa. Mide impulso de compra/venta. 
+                    {technicalData.rsi > 70 ? ' Sobrecomprado (posible corrección a la baja)' 
+                     : technicalData.rsi < 30 ? ' Sobrevendido (posible rebote al alza)' 
+                     : ' En rango neutral (30-70)'}
+                  </Text>
+                </View>
+
+                {/* SMA 50 */}
+                {technicalData.sma50 !== undefined && technicalData.sma50 !== null && (
+                  <View style={styles.technicalItem}>
+                    <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 50</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                      ${technicalData.sma50.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                      Media móvil de 50 días. Tendencia a corto plazo
+                    </Text>
+                  </View>
+                )}
+
+                {/* SMA 200 */}
+                {technicalData.sma200 !== undefined && technicalData.sma200 !== null && (
+                  <View style={styles.technicalItem}>
+                    <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 200</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                      ${technicalData.sma200.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                      Media móvil de 200 días. Tendencia a largo plazo
+                    </Text>
+                  </View>
+                )}
+
+                {/* Soporte */}
+                {technicalData.support1 !== undefined && technicalData.support1 !== null && (
+                  <View style={styles.technicalItem}>
+                    <Text style={[styles.technicalLabel, { color: colors.text }]}>Soporte</Text>
+                    <Text style={[styles.statValue, { color: '#10b981' }]}>
+                      ${technicalData.support1.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                      Nivel de precio donde suele haber demanda de compra
+                    </Text>
+                  </View>
+                )}
+
+                {/* Resistencia */}
+                {technicalData.resistance1 !== undefined && technicalData.resistance1 !== null && (
+                  <View style={styles.technicalItem}>
+                    <Text style={[styles.technicalLabel, { color: colors.text }]}>Resistencia</Text>
+                    <Text style={[styles.statValue, { color: '#ef4444' }]}>
+                      ${technicalData.resistance1.toFixed(2)}
+                    </Text>
+                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                      Nivel de precio donde suele haber presión de venta
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Description */}
           <View style={[styles.descriptionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -187,9 +471,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 16,
     borderBottomWidth: 1,
+    zIndex: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   backButton: {
     width: 40,
@@ -295,6 +585,59 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  technicalCard: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  technicalDescription: {
+    fontSize: 13,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  technicalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  technicalItem: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  technicalItemFull: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  technicalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  technicalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  technicalExplanation: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  rsiContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  rsiValue: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  rsiSignal: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   descriptionCard: {
     padding: 16,

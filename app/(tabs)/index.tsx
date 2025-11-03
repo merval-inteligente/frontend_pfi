@@ -3,8 +3,8 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getNews, getStocks } from '@/controller/apiController';
-import { MarketData, MarketService, NewsItem as MockNewsItem, NewsService, Stock, StockService } from '@/services/mockData';
+import { getMervalPrice, getNews, getStockPrice, getStocks } from '@/controller/apiController';
+import { MarketData, MarketService, NewsItem as MockNewsItem, Stock } from '@/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -359,10 +359,12 @@ export default function HomeScreen() {
   const [userStocks, setUserStocks] = useState<Stock[]>([]);
   const [news, setNews] = useState<(MockNewsItem | BackendNewsItem)[]>([]);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
+  const [mervalPrice, setMervalPrice] = useState<number | null>(null);
+  const [mervalChange, setMervalChange] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAllStocks, setShowAllStocks] = useState(false);
   const [showAllNews, setShowAllNews] = useState(false);
-  const [newsSource, setNewsSource] = useState<'backend' | 'mock'>('backend');
+  const [newsSource, setNewsSource] = useState<'backend' | 'mock' | 'none'>('backend');
   const [lastNewsLoad, setLastNewsLoad] = useState<number>(0);
   const [expandedNews, setExpandedNews] = useState<Set<string>>(new Set());
 
@@ -394,55 +396,97 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
       
-      // Delay inicial para evitar rate limiting
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Delay inicial MÁS LARGO para evitar rate limiting (429)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Load user's favorite stocks
       if (isAuthenticated && userFavorites && userFavorites.length > 0) {
         try {
           const token = await getStoredToken();
-          if (token) {
-            // Obtener todos los stocks desde el backend
-            const stocksResponse = await getStocks(token);
-            
-            // Filtrar solo los stocks que están en favoritos
-            const favoriteStocks = stocksResponse.stocks
-              .filter((stock: any) => userFavorites.includes(stock.symbol))
-              .map((stock: any) => ({
-                id: stock.symbol,
-                symbol: stock.symbol,
-                name: stock.name,
-                sector: stock.sector,
-                currentPrice: Math.floor(Math.random() * 1000) + 100,
-                percentageChange: (Math.random() - 0.5) * 10,
-              }));
-            
-            setUserStocks(favoriteStocks);
-            
-            // 🕐 Delay para evitar rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-          } else {
-            throw new Error('No token available');
-          }
-        } catch (error) {
-          console.error('Error loading backend stocks:', error);
-          // Fallback a datos mock
-          if (user?.preferences.favoriteStocks) {
-            const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
-            setUserStocks(stocks);
-          } else {
+          if (!token) {
+            console.log('⚠️ [STOCKS] No hay token disponible');
             setUserStocks([]);
+            return;
           }
-        }
-      } else {
-        // Usuario no autenticado o sin favoritos, usar datos mock
-        if (user?.preferences.favoriteStocks) {
-          const stocks = await StockService.getUserStocks(user.preferences.favoriteStocks);
-          setUserStocks(stocks);
-        } else {
+          
+          // Obtener todos los stocks desde el backend con reintentos
+          console.log('📊 [STOCKS] Obteniendo lista de stocks del backend...');
+          const stocksResponse = await getStocks(token);
+          
+          if (!stocksResponse || !stocksResponse.stocks) {
+            console.error('⚠️ [STOCKS] Respuesta inválida del backend');
+            setUserStocks([]);
+            return;
+          }
+          
+          // Filtrar solo los stocks que están en favoritos
+          const favoriteSymbols = stocksResponse.stocks
+            .filter((stock: any) => userFavorites.includes(stock.symbol));
+          
+          if (favoriteSymbols.length === 0) {
+            console.log('⚠️ [STOCKS] No hay símbolos favoritos en el backend');
+            setUserStocks([]);
+            return;
+          }
+          
+          console.log('📊 [STOCKS] Cargando precios reales para:', favoriteSymbols.map((s: any) => s.symbol));
+          
+          // Obtener precios con DELAYS entre requests para evitar rate limiting
+          const stocksWithPrices = [];
+          for (let i = 0; i < favoriteSymbols.length; i++) {
+            const stock = favoriteSymbols[i];
+            try {
+              // Delay progresivo entre cada request (500ms base + 200ms por cada stock)
+              if (i > 0) {
+                const delay = 500 + (i * 200);
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+              
+              const priceData = await getStockPrice(stock.symbol);
+              
+              if (priceData.success && priceData.data && priceData.data.price !== null && priceData.data.price !== undefined) {
+                console.log(`✅ [STOCK] ${stock.symbol}: $${priceData.data.price} (${priceData.data.changePercent}%)`);
+                stocksWithPrices.push({
+                  id: stock.symbol,
+                  symbol: stock.symbol,
+                  name: stock.name,
+                  sector: stock.sector,
+                  currentPrice: priceData.data.price,
+                  dailyChange: priceData.data.change || 0,
+                  percentageChange: priceData.data.changePercent || 0,
+                  volume: priceData.data.volume || 0,
+                  marketCap: 0,
+                  pe: 0,
+                  dividend: 0,
+                  description: '',
+                });
+              } else {
+                console.warn(`⚠️ [STOCK] ${stock.symbol}: respuesta inválida del backend`);
+              }
+            } catch (error) {
+              console.error(`❌ [STOCK] Error obteniendo precio de ${stock.symbol}:`, error);
+            }
+          }
+          
+          if (stocksWithPrices.length === 0) {
+            console.error('❌ [STOCKS] No se pudieron obtener precios válidos del backend');
+            setUserStocks([]);
+          } else {
+            setUserStocks(stocksWithPrices);
+            console.log(`✅ [STOCKS] ${stocksWithPrices.length}/${favoriteSymbols.length} stocks cargados exitosamente`);
+          }
+          
+          // 🕐 Delay final antes de cargar noticias
+          await new Promise(resolve => setTimeout(resolve, 2000));
+            
+        } catch (error) {
+          console.error('❌ [STOCKS] Error crítico cargando stocks del backend:', error);
+          // NO usar mock - mostrar lista vacía y dejar que el usuario sepa que hay un problema
           setUserStocks([]);
         }
+      } else {
+        // Usuario no autenticado o sin favoritos
+        setUserStocks([]);
       }
       
       // Delay adicional antes de cargar noticias
@@ -455,134 +499,130 @@ export default function HomeScreen() {
       if (isAuthenticated && (now - lastNewsLoad > CACHE_DURATION)) {
         try {
           const token = await getStoredToken();
-          if (token) {
-            console.log('📰 [DEBUG] Iniciando llamada a getNews del backend...');
-            const newsResponse = await getNews(token, 1, 5, 'fecha_scrapeo', 'desc');
-            
-            console.log('📰 [DEBUG] Respuesta completa del backend:', {
-              success: newsResponse.success,
-              data: newsResponse.data,
-              message: newsResponse.message,
-              error: newsResponse.error
+          if (!token) {
+            console.error('⚠️ [NEWS] No hay token disponible, usando mock');
+            throw new Error('No token available');
+          }
+          
+          console.log('📰 [DEBUG] Iniciando llamada a getNews del backend...');
+          
+          // Reintentos para noticias
+          let newsResponse: any = null;
+          let retryCount = 0;
+          const maxRetries = 2;
+          
+          while (retryCount <= maxRetries) {
+            try {
+              newsResponse = await getNews(token, 1, 5, 'fecha_scrapeo', 'desc');
+              if (newsResponse && newsResponse.success) {
+                break; // Éxito, salir del loop
+              }
+              throw new Error('Invalid response structure');
+            } catch (fetchError) {
+              retryCount++;
+              if (retryCount > maxRetries) {
+                console.error(`❌ [NEWS] Falló después de ${maxRetries} reintentos`);
+                throw fetchError;
+              }
+              console.error(`⚠️ [NEWS] Reintento ${retryCount}/${maxRetries} en 1s...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+          
+          if (!newsResponse) {
+            throw new Error('Failed to get news response after retries');
+          }
+          
+          console.log('📰 [DEBUG] Respuesta completa del backend:', {
+            success: newsResponse.success,
+            hasData: !!newsResponse.data,
+            hasNews: !!newsResponse.data?.news,
+            newsCount: newsResponse.data?.news?.length || 0
+          });
+          
+          if (newsResponse.success && newsResponse.data?.news && Array.isArray(newsResponse.data.news)) {
+            console.log('📰 [DEBUG] Noticias recibidas del backend:', {
+              count: newsResponse.data.news.length,
+              totalInResponse: newsResponse.data.total,
             });
             
-            if (newsResponse.success && newsResponse.data?.news) {
-              console.log('📰 [DEBUG] Noticias recibidas del backend:', {
-                count: newsResponse.data.news.length,
-                totalInResponse: newsResponse.data.total,
-                firstNewsRaw: JSON.stringify(newsResponse.data.news[0], null, 2),
-                firstNewsKeys: newsResponse.data.news[0] ? Object.keys(newsResponse.data.news[0]) : 'No keys',
-                firstNews: newsResponse.data.news[0] ? {
-                  id: newsResponse.data.news[0]._id,
-                  titulo: newsResponse.data.news[0].titulo,
-                  title: newsResponse.data.news[0].title, // Podría ser 'title' en lugar de 'titulo'
-                  resumen: newsResponse.data.news[0].resumen,
-                  summary: newsResponse.data.news[0].summary, // Podría ser 'summary' en lugar de 'resumen'
-                  contenido: newsResponse.data.news[0].contenido,
-                  content: newsResponse.data.news[0].content, // Podría ser 'content' en lugar de 'contenido'
-                  hasResumen: !!newsResponse.data.news[0].resumen,
-                  hasContenido: !!newsResponse.data.news[0].contenido,
-                  empresas: newsResponse.data.news[0].empresas_merval,
-                  companies: newsResponse.data.news[0].companies, // Podría ser otro nombre
-                  fecha_scrapeo: newsResponse.data.news[0].fecha_scrapeo,
-                  date: newsResponse.data.news[0].date, // Podría ser otro campo de fecha
-                  createdAt: newsResponse.data.news[0].createdAt
-                } : 'No hay noticias',
-                allNews: newsResponse.data.news.map((n: any) => ({ 
-                  id: n._id, 
-                  titulo: n.titulo, 
-                  title: n.title,
-                  hasContent: !!(n.resumen || n.contenido || n.summary || n.content),
-                  allKeys: Object.keys(n)
-                }))
-              });
+            // Filtrar noticias que tengan datos mínimos válidos - versión flexible
+            const validNews = newsResponse.data.news.filter((news: any) => {
+              // Buscar título en diferentes posibles campos
+              const title = news.titulo || news.title || news.headline || news.name;
+              // Buscar contenido en diferentes posibles campos  
+              const content = news.resumen || news.contenido || news.summary || news.content || news.description || news.body;
               
-              // Filtrar noticias que tengan datos mínimos válidos - versión flexible
-              const validNews = newsResponse.data.news.filter((news: any) => {
-                // Buscar título en diferentes posibles campos
-                const title = news.titulo || news.title || news.headline || news.name;
-                // Buscar contenido en diferentes posibles campos  
-                const content = news.resumen || news.contenido || news.summary || news.content || news.description || news.body;
-                
-                const isValid = news && title && content;
-                if (!isValid) {
-                  console.log('🚫 [DEBUG] Noticia inválida filtrada:', {
-                    id: news?._id || news?.id,
-                    titulo: news?.titulo,
-                    title: news?.title,
-                    headline: news?.headline,
-                    hasResumen: !!news?.resumen,
-                    hasContenido: !!news?.contenido,
-                    hasSummary: !!news?.summary,
-                    hasContent: !!news?.content,
-                    hasDescription: !!news?.description,
-                    allKeys: Object.keys(news || {})
-                  });
-                }
-                return isValid;
-              });
-              
-              console.log('[DEBUG] Noticias válidas filtradas:', {
-                original: newsResponse.data.news.length,
-                filtered: validNews.length,
-                validTitles: validNews.map((n: any) => n.title || n.titulo || n.headline)
-              });
-              
+              return news && title && content;
+            });
+            
+            console.log('[DEBUG] Noticias válidas filtradas:', {
+              original: newsResponse.data.news.length,
+              filtered: validNews.length,
+              validTitles: validNews.map((n: any) => n.title || n.titulo || n.headline).slice(0, 3)
+            });
+            
+            if (validNews.length > 0) {
               setNews(validNews);
               setNewsSource('backend');
               setLastNewsLoad(now);
             } else {
-              console.log('⚠️ [DEBUG] Respuesta del backend no válida:', {
-                success: newsResponse.success,
-                hasData: !!newsResponse.data,
-                hasNews: !!newsResponse.data?.news,
-                dataKeys: newsResponse.data ? Object.keys(newsResponse.data) : 'No data',
-                error: newsResponse.error
-              });
-              throw new Error(newsResponse.error || 'Error obteniendo noticias del backend');
+              console.error('⚠️ [NEWS] No hay noticias válidas, usando mock');
+              throw new Error('No valid news items');
             }
           } else {
-            throw new Error('No token available');
+            console.log('⚠️ [DEBUG] Respuesta del backend no válida:', {
+              success: newsResponse?.success,
+              hasData: !!newsResponse?.data,
+              hasNews: !!newsResponse?.data?.news,
+              error: newsResponse?.error
+            });
+            throw new Error(newsResponse?.error || 'Error obteniendo noticias del backend');
           }
         } catch (error) {
-          console.error('🚫 [DEBUG] Error loading backend news, usando fallback:', {
-            error: error,
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
-            errorStack: error instanceof Error ? error.stack : 'No stack'
-          });
-          // Fallback a datos mock
-          const newsData = await NewsService.getNews(5);
-          setNews(newsData);
-          setNewsSource('mock');
+          console.error('🚫 [NEWS] Error cargando noticias del backend:', error);
+          // NO usar mock - dejar noticias vacías
+          setNews([]);
+          setNewsSource('none');
         }
       } else if (isAuthenticated) {
-        // Cache válido, no hacer nada
+        // Cache válido, no hacer nada (mantener noticias actuales)
+        console.log('📰 [NEWS] Usando cache de noticias');
       } else {
-        // Usuario no autenticado, usar datos mock
-        const newsData = await NewsService.getNews(5);
-        setNews(newsData);
-        setNewsSource('mock');
+        // Usuario no autenticado
+        setNews([]);
+        setNewsSource('none');
       }
       
-      // Load market data
+      // Load market data (mock)
       const market = await MarketService.getMarketData();
       setMarketData(market);
+      
+      // Load MERVAL real price
+      try {
+        console.error('📊 [DEBUG] Cargando precio real del MERVAL...');
+        const mervalData = await getMervalPrice();
+        if (mervalData.success && mervalData.data) {
+          console.error('📊 [DEBUG] Precio MERVAL obtenido:', {
+            price: mervalData.data.price,
+            change: mervalData.data.change,
+            changePercent: mervalData.data.changePercent
+          });
+          setMervalPrice(mervalData.data.price);
+          setMervalChange(mervalData.data.changePercent);
+        } else {
+          console.error('⚠️ [DEBUG] No se pudo obtener precio del MERVAL, usando mock');
+        }
+      } catch (mervalError) {
+        console.error('❌ [DEBUG] Error cargando precio MERVAL:', mervalError);
+      }
       
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
-      // Log final del estado de noticias
-      console.log('📊 [DEBUG] Estado final de noticias:', {
-        newsLength: news.length,
-        newsSource: newsSource,
-        isLoading: false,
-        displayedNewsLength: displayedNews.length,
-        firstNewsTitle: news[0] ? (newsSource === 'backend' ? (news[0] as BackendNewsItem).titulo : (news[0] as MockNewsItem).title) : 'No news'
-      });
-      
       setIsLoading(false);
     }
-  }, [isAuthenticated, user, userFavorites, lastNewsLoad]);
+  }, [isAuthenticated, userFavorites, lastNewsLoad]);
 
   // Cargar datos inicial cuando el usuario esté autenticado  
   useEffect(() => {
@@ -600,34 +640,64 @@ export default function HomeScreen() {
     if (isAuthenticated && userFavorites && Array.isArray(userFavorites) && userFavorites.length > 0) {
       const reloadStockData = async () => {
         try {
-          // Intentar cargar desde backend primero
           const token = await getStoredToken();
-          if (token) {
-            try {
-              const stocksResponse = await getStocks(token);
-              const favoriteStocks = stocksResponse.stocks
-                .filter((stock: any) => userFavorites.includes(stock.symbol))
-                .map((stock: any) => ({
-                  id: stock.symbol,
-                  symbol: stock.symbol,
-                  name: stock.name,
-                  sector: stock.sector,
-                  currentPrice: Math.floor(Math.random() * 1000) + 100,
-                  percentageChange: (Math.random() - 0.5) * 10,
-                }));
-              
-              setUserStocks(favoriteStocks);
-              return;
-            } catch (error) {
-              console.error('Error loading stocks from backend:', error);
-            }
+          if (!token) {
+            console.log('⚠️ [RELOAD] No hay token disponible');
+            setUserStocks([]);
+            return;
           }
           
-          // Fallback a datos mock
-          const stocks = await StockService.getUserStocks(userFavorites);
-          setUserStocks(stocks);
+          try {
+            console.log('🔄 [RELOAD] Recargando stocks del backend...');
+            const stocksResponse = await getStocks(token);
+            
+            if (!stocksResponse || !stocksResponse.stocks) {
+              console.warn('⚠️ [RELOAD] Respuesta inválida del backend');
+              setUserStocks([]);
+              return;
+            }
+            
+            const favoriteSymbols = stocksResponse.stocks
+              .filter((stock: any) => userFavorites.includes(stock.symbol));
+            
+            if (favoriteSymbols.length === 0) {
+              setUserStocks([]);
+              return;
+            }
+            
+            // Obtener precios reales para cada acción
+            const stocksWithPrices = await Promise.all(
+              favoriteSymbols.map(async (stock: any) => {
+                try {
+                  const priceData = await getStockPrice(stock.symbol);
+                  
+                  if (priceData.success && priceData.data && priceData.data.price !== null) {
+                    return {
+                      id: stock.symbol,
+                      symbol: stock.symbol,
+                      name: stock.name,
+                      sector: stock.sector,
+                      currentPrice: priceData.data.price,
+                      percentageChange: priceData.data.changePercent || 0,
+                    };
+                  }
+                  return null;
+                } catch {
+                  return null;
+                }
+              })
+            );
+            
+            const validStocks = stocksWithPrices.filter((s): s is NonNullable<typeof s> => s !== null);
+            setUserStocks(validStocks);
+            console.log(`✅ [RELOAD] ${validStocks.length} stocks recargados`);
+          } catch (error) {
+            console.error('❌ [RELOAD] Error cargando stocks del backend:', error);
+            setUserStocks([]);
+          }
         } catch (error) {
-          console.error('Error loading user stocks:', error);
+          console.error('❌ [RELOAD] Error inesperado:', error);
+          setUserStocks([]);
         }
       };
       reloadStockData();
@@ -655,6 +725,56 @@ export default function HomeScreen() {
   const formatPercentage = (num: number) => {
     return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
   };
+
+  // Función para obtener el sentimiento del mercado basado en el MERVAL
+  const getMarketSentiment = () => {
+    // Usar mervalChange si está disponible (datos reales), sino usar marketData (mock)
+    const change = mervalChange !== null ? mervalChange : marketData?.mervalIndex.percentageChange || 0;
+    
+    if (change > 1) {
+      return {
+        title: 'Muy Optimista 🚀',
+        description: 'El MERVAL sube fuertemente. Momento favorable para el mercado argentino.',
+        emoji: '📈',
+        color: '#10b981', // Verde fuerte
+        imageUri: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' // Gráfico subiendo
+      };
+    } else if (change > 0) {
+      return {
+        title: 'Optimista 📊',
+        description: 'El mercado muestra una tendencia positiva generalizada.',
+        emoji: '📈',
+        color: '#22c55e', // Verde medio
+        imageUri: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+      };
+    } else if (change === 0) {
+      return {
+        title: 'Neutral ⚖️',
+        description: 'El mercado se mantiene estable, sin cambios significativos.',
+        emoji: '➡️',
+        color: '#64748b', // Gris
+        imageUri: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+      };
+    } else if (change > -1) {
+      return {
+        title: 'Cauteloso ⚠️',
+        description: 'El mercado presenta leve volatilidad. Mantente informado sobre las tendencias.',
+        emoji: '📉',
+        color: '#f59e0b', // Amarillo/naranja
+        imageUri: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+      };
+    } else {
+      return {
+        title: 'Bajista 📉',
+        description: 'El MERVAL cae significativamente. Se recomienda precaución en las inversiones.',
+        emoji: '🔻',
+        color: '#ef4444', // Rojo
+        imageUri: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' // Gráfico bajando
+      };
+    }
+  };
+
+  const marketSentiment = getMarketSentiment();
 
   if (isLoading) {
     return (
@@ -724,8 +844,8 @@ export default function HomeScreen() {
               <Text style={[styles.mervalText, {
                 fontSize: IS_DESKTOP_SCREEN ? 28 : 20
               }]}>
-                MERVAL: {marketData ? formatNumber(marketData.mervalIndex.value) : '1.567.234'} 
-                {marketData ? ` (${formatPercentage(marketData.mervalIndex.percentageChange)})` : ' (+2,34%)'} 📈
+                MERVAL: {mervalPrice ? formatNumber(mervalPrice) : (marketData ? formatNumber(marketData.mervalIndex.value) : '1.567.234')} 
+                {mervalChange !== null ? ` (${formatPercentage(mervalChange)})` : (marketData ? ` (${formatPercentage(marketData.mervalIndex.percentageChange)})` : ' (+2,34%)')} 📈
               </Text>
             </View>
           </ImageBackground>
@@ -872,20 +992,29 @@ export default function HomeScreen() {
             flex: IS_DESKTOP_SCREEN ? 2 : 1
           }]}>
             <Text style={[styles.sentimentTitle, { 
-              color: colors.text,
+              color: marketSentiment.color,
               fontSize: IS_DESKTOP_SCREEN ? 20 : 16
             }]}>
-              {marketData?.mervalIndex.percentageChange && marketData.mervalIndex.percentageChange > 0 ? 'Optimista' : 'Cauteloso'}
+              {marketSentiment.title}
             </Text>
             <Text style={[styles.sentimentDescription, { 
               color: colors.subtitle,
               fontSize: IS_DESKTOP_SCREEN ? 16 : 14
             }]}>
-              {marketData?.mervalIndex.percentageChange && marketData.mervalIndex.percentageChange > 0 
-                ? 'El mercado muestra una tendencia positiva generalizada.'
-                : 'El mercado presenta volatilidad, mantente informado.'
-              }
+              {marketSentiment.description}
             </Text>
+            {mervalChange !== null && (
+              <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[{ 
+                  fontSize: 14, 
+                  fontWeight: '600',
+                  color: marketSentiment.color 
+                }]}>
+                  MERVAL: {formatPercentage(mervalChange)}
+                </Text>
+                <Text style={{ fontSize: 18 }}>{marketSentiment.emoji}</Text>
+              </View>
+            )}
           </View>
           <View style={[styles.sentimentImageContainer, {
             flex: IS_DESKTOP_SCREEN ? 1 : undefined,
@@ -893,7 +1022,7 @@ export default function HomeScreen() {
           }]}>
             <Image
               source={{
-                uri: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80'
+                uri: marketSentiment.imageUri
               }}
               style={styles.sentimentImage}
               contentFit="cover"

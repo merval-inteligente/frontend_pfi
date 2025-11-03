@@ -852,6 +852,273 @@ export const getStocks = async (token: string) => {
 };
 
 /**
+ * Obtiene el precio actual del índice MERVAL en tiempo real
+ * @returns {Promise} Datos del índice MERVAL con precio actual
+ */
+export const getMervalPrice = async () => {
+  const cacheKey = 'merval_price';
+  
+  // Cache muy corto para datos en tiempo real (30 segundos)
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    console.error('📊 [MERVAL] Usando datos desde cache');
+    return cachedData;
+  }
+
+  const url = urlWebServices.getMervalPrice;
+  console.error('📊 [MERVAL - START] ====================');
+  console.error('📊 [MERVAL] URL:', url);
+
+  try {
+    console.error('📊 [MERVAL] Haciendo request...');
+    const response = await makeRequestWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.error('📊 [MERVAL] Response status:', response.status);
+    console.error('📊 [MERVAL] Response ok:', response.ok);
+
+    if (!response.ok) {
+      console.error('❌ [MERVAL] Response NO OK, status:', response.status);
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+        console.error('❌ [MERVAL] Error del servidor:', errorData);
+      } catch (parseError) {
+        console.error('❌ [MERVAL] No se pudo parsear error');
+      }
+      throw new Error(errorMessage);
+    }
+
+    console.error('📊 [MERVAL] Parseando JSON...');
+    const data = await response.json();
+    console.error('📊 [MERVAL] Data recibida:', JSON.stringify(data, null, 2));
+    
+    if (data.success && data.data) {
+      const result = {
+        success: true,
+        data: {
+          index: data.data.index,
+          name: data.data.name,
+          price: data.data.price,
+          previousClose: data.data.previousClose,
+          change: data.data.change,
+          changePercent: data.data.changePercent,
+          volume: data.data.volume,
+          high: data.data.high,
+          low: data.data.low,
+          currency: data.data.currency,
+          date: data.data.date,
+          timestamp: data.data.timestamp,
+          source: data.data.source
+        },
+        message: data.message
+      };
+      
+      // Guardar en cache por 30 segundos
+      saveToCache(cacheKey, result, 30000);
+      console.error('✅ [MERVAL] Precio obtenido correctamente:', {
+        price: result.data.price,
+        change: result.data.change,
+        changePercent: result.data.changePercent
+      });
+      console.error('📊 [MERVAL - END] ====================');
+      
+      return result;
+    } else {
+      console.error('❌ [MERVAL] Respuesta sin success o sin data');
+      throw new Error(data.message || 'Error al obtener precio del MERVAL');
+    }
+  } catch (error) {
+    console.error('❌❌❌ [MERVAL] ERROR:', error);
+    console.error('📊 [MERVAL - END ERROR] ====================');
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener precio del MERVAL'
+    };
+  }
+};
+
+/**
+ * Obtiene el precio actual de una acción específica del MERVAL
+ * @param {string} symbol - Símbolo de la acción (ej: YPF, GGAL, ALUA)
+ * @returns {Promise} Datos de la acción con precio actual
+ */
+export const getStockPrice = async (symbol: string) => {
+  const cacheKey = `stock_price_${symbol}`;
+  
+  // Cache de 30 segundos para precios en tiempo real
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
+  const url = `${urlWebServices.getStockPrice}${symbol}`;
+
+  try {
+    const response = await makeRequestWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        // Ignorar error de parseo
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    
+    if (data.success && data.data) {
+      const result = {
+        success: true,
+        data: {
+          symbol: data.data.symbol,
+          yahooSymbol: data.data.yahooSymbol,
+          name: data.data.name,
+          price: data.data.price,
+          previousClose: data.data.previousClose,
+          change: data.data.change,
+          changePercent: data.data.changePercent,
+          volume: data.data.volume,
+          high: data.data.high,
+          low: data.data.low,
+          open: data.data.open,
+          currency: data.data.currency,
+          date: data.data.date,
+          source: data.data.source
+        },
+        message: data.message
+      };
+      
+      // Guardar en cache por 30 segundos
+      saveToCache(cacheKey, result, 30000);
+      
+      return result;
+    } else {
+      throw new Error(data.message || 'Error al obtener precio de la acción');
+    }
+  } catch (error) {
+    console.error(`❌ Error obteniendo precio de ${symbol}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener precio de la acción'
+    };
+  }
+};
+
+/**
+ * Obtiene el análisis técnico de una acción específica del MERVAL
+ * @param {string} symbol - Símbolo de la acción (ej: YPF, GGAL, ALUA)
+ * @returns {Promise} Análisis técnico con RSI, SMA, soportes y resistencias
+ */
+export const getStockTechnical = async (symbol: string) => {
+  const cacheKey = `stock_technical_${symbol}`;
+  
+  // Cache de 5 minutos para análisis técnico (cambia menos que el precio)
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
+  const url = `${urlWebServices.getStockTechnical}${symbol}/technical`;
+
+  try {
+    console.error(`📊 [TECHNICAL] Obteniendo análisis técnico de ${symbol}...`);
+    
+    const response = await makeRequestWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        // Ignorar error de parseo
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    
+    if (data.success && data.data) {
+      console.error(`✅ [TECHNICAL] Análisis de ${symbol}:`, {
+        rsi: data.data.indicators?.rsi,
+        rsiSignal: data.data.indicators?.rsiSignal,
+        sma50: data.data.movingAverages?.sma50,
+        support: data.data.support?.level1,
+        resistance: data.data.resistance?.level1
+      });
+      
+      const result = {
+        success: true,
+        data: {
+          symbol: data.data.symbol,
+          name: data.data.name,
+          currentPrice: data.data.currentPrice,
+          movingAverages: {
+            sma50: data.data.movingAverages?.sma50,
+            sma200: data.data.movingAverages?.sma200,
+            distanceToSMA50: data.data.movingAverages?.distanceToSMA50,
+            distanceToSMA200: data.data.movingAverages?.distanceToSMA200
+          },
+          indicators: {
+            rsi: data.data.indicators?.rsi,
+            rsiSignal: data.data.indicators?.rsiSignal // OVERSOLD, NEUTRAL, OVERBOUGHT
+          },
+          signals: {
+            sma50Signal: data.data.signals?.sma50Signal, // BULLISH, BEARISH, NEUTRAL
+            sma200Signal: data.data.signals?.sma200Signal,
+            rsiSignal: data.data.signals?.rsiSignal,
+            goldenCross: data.data.signals?.goldenCross
+          },
+          support: {
+            level1: data.data.support?.level1,
+            level2: data.data.support?.level2
+          },
+          resistance: {
+            level1: data.data.resistance?.level1,
+            level2: data.data.resistance?.level2
+          },
+          timestamp: data.data.timestamp,
+          source: data.data.source
+        },
+        message: data.message
+      };
+      
+      // Guardar en cache por 5 minutos (300 segundos)
+      saveToCache(cacheKey, result, 300000);
+      
+      return result;
+    } else {
+      throw new Error(data.message || 'Error al obtener análisis técnico');
+    }
+  } catch (error) {
+    console.error(`❌ [TECHNICAL] Error obteniendo análisis de ${symbol}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener análisis técnico'
+    };
+  }
+};
+
+/**
  * Obtiene los favoritos del usuario (solo símbolos)
  * @param {string} token - JWT token del usuario
  * @returns {Promise} Lista de símbolos favoritos del usuario
@@ -1483,12 +1750,18 @@ export const sendChatMessage = async (token: string, message: string, userId: st
  */
 export const getChatHistory = async (token: string, userId: string, limit: number = 50) => {
   const url = `${urlWebServices.chatGetHistory}/${userId}?limit=${limit}`;
+  console.error('💬 [API - GET HISTORY] ====================');
+  console.error('💬 [API] URL:', url);
+  console.error('💬 [API] userId:', userId);
+  console.error('💬 [API] limit:', limit);
 
   try {
     if (!token || !userId) {
+      console.error('❌ [API] Sin token o userId');
       throw new Error('No hay autenticación disponible');
     }
 
+    console.error('💬 [API] Haciendo request...');
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1496,8 +1769,12 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
       }
     });
 
+    console.error('💬 [API] Response status:', response.status);
+    console.error('💬 [API] Response ok:', response.ok);
+
     // Si es 404, significa que el usuario no tiene historial (usuario nuevo)
     if (response.status === 404) {
+      console.error('💬 [API] Status 404 - Usuario nuevo sin historial');
       return {
         success: true,
         messages: [],
@@ -1507,20 +1784,36 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
     }
 
     if (!response.ok) {
+      console.error('❌ [API] Response NO OK, status:', response.status);
       throw new Error(`Get history failed: ${response.status}`);
     }
 
+    console.error('💬 [API] Parseando JSON...');
     const data = await response.json();
+    console.error('💬 [API] Data recibida:', JSON.stringify(data, null, 2));
     
-    return {
+    const result = {
       success: true,
-      messages: data.history || [],
-      total: data.total_messages || 0,
+      messages: data.messages || data.history || [], // El backend devuelve 'messages', no 'history'
+      total: data.total_messages || data.messages?.length || 0,
       isNewUser: false
     };
+    console.error('💬 [API] Resultado a devolver:', {
+      success: result.success,
+      messagesCount: result.messages.length,
+      total: result.total,
+      isNewUser: result.isNewUser
+    });
+    console.error('✅ [API] Historial obtenido correctamente');
+    console.error('💬 [API - GET HISTORY END] ====================');
+    return result;
   } catch (error) {
+    console.error('❌❌❌ [API] ERROR en getChatHistory:', error);
+    console.error('💬 [API] Error message:', error instanceof Error ? error.message : 'Unknown error');
     // Si es un error de red o 404, tratarlo como usuario nuevo
     if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
+      console.error('💬 [API] Tratando como usuario nuevo por 404');
+      console.error('💬 [API - GET HISTORY END] ====================');
       return {
         success: true,
         messages: [],
@@ -1528,6 +1821,7 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
         isNewUser: true
       };
     }
+    console.error('💬 [API - GET HISTORY END ERROR] ====================');
     return { success: false, error: error instanceof Error ? error.message : 'Error al obtener historial' };
   }
 };
@@ -1595,7 +1889,7 @@ const getChatFallbackResponse = (message: string): string => {
 // 📰 ENDPOINTS DE NOTICIAS MERVAL
 
 /**
- * Helper para manejar rate limiting con reintentos
+ * Helper para manejar rate limiting con reintentos y mejor logging
  */
 const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetries: number = 1): Promise<Response> => {
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
@@ -1603,22 +1897,38 @@ const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetrie
       // Agregar delay progresivo entre intentos - más conservador
       if (attempt > 1) {
         const delay = Math.min(3000 * Math.pow(2, attempt - 2), 15000); // Exponential backoff, máx 15s
-        console.log(`🔄 [RETRY] Intento ${attempt}, esperando ${delay}ms...`);
+        console.log(`🔄 [RETRY] Intento ${attempt}/${maxRetries + 1}, esperando ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
+      console.log(`🌐 [REQUEST] ${attempt > 1 ? 'Reintentando' : 'Iniciando'} request a ${url.substring(url.lastIndexOf('/'))}`);
       const response = await fetch(url, options);
       
       // Si es rate limit (429), esperar más tiempo antes de reintentar
       if (response.status === 429 && attempt <= maxRetries) {
-        console.log(`⏳ [RATE_LIMIT] HTTP 429 detectado, esperando antes de reintentar...`);
+        console.warn(`⏳ [RATE_LIMIT] HTTP 429 detectado, esperando antes de reintentar...`);
         await new Promise(resolve => setTimeout(resolve, 10000)); // Esperar 10 segundos
         continue;
       }
       
+      // Log del resultado
+      if (response.ok) {
+        console.log(`✅ [REQUEST] Exitoso (${response.status}) - ${url.substring(url.lastIndexOf('/'))}`);
+      } else {
+        console.warn(`⚠️ [REQUEST] Respuesta no OK (${response.status}) - ${url.substring(url.lastIndexOf('/'))}`);
+      }
+      
       return response;
     } catch (error) {
+      console.error(`❌ [REQUEST] Error en intento ${attempt}/${maxRetries + 1}:`, error instanceof Error ? error.message : 'Error desconocido');
+      
+      // Identificar tipo de error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('🔌 [NETWORK] Error de red - Backend posiblemente no disponible');
+      }
+      
       if (attempt === maxRetries + 1) {
+        console.error(`❌ [REQUEST] Todos los reintentos fallaron para ${url}`);
         throw error;
       }
     }

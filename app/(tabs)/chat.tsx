@@ -6,15 +6,15 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 interface ChatMessage {
@@ -142,11 +142,29 @@ export default function ChatScreen() {
   // Función para cargar historial de chat
   const loadChatHistory = async (token: string, userId: string) => {
     try {
-      
+      console.error('💬 [CHAT HISTORY - START] ====================');
+      console.error('💬 [CHAT] Cargando historial para userId:', userId);
       const historyResult = await getChatHistory(token, userId, 10); // Últimos 10 mensajes
+      console.error('💬 [CHAT] Respuesta completa del historial:', JSON.stringify(historyResult, null, 2));
+      console.error('💬 [CHAT] Análisis de respuesta:', {
+        success: historyResult.success,
+        hasMessages: !!historyResult.messages,
+        messagesLength: historyResult.messages?.length || 0,
+        isNewUser: historyResult.isNewUser,
+        error: historyResult.error || 'Sin error'
+      });
+      
+      // Manejar error en la respuesta
+      if (!historyResult.success) {
+        console.error('⚠️ [CHAT] Error obteniendo historial:', historyResult.error);
+        console.error('💬 [CHAT] Continuando sin historial previo');
+        console.error('💬 [CHAT HISTORY - END] ====================');
+        return [];
+      }
       
       if (historyResult.success && historyResult.messages && historyResult.messages.length > 0) {
-        
+        console.error('💬 [CHAT] Primer mensaje del historial:', JSON.stringify(historyResult.messages[0], null, 2));
+        console.error('💬 [CHAT] Total de mensajes en historial:', historyResult.messages.length);
         
         // Convertir mensajes del historial al formato del chat
         const historyMessages: ChatMessage[] = historyResult.messages.map((msg: any, index: number) => {
@@ -171,17 +189,21 @@ export default function ChatScreen() {
           return messages;
         }).flat();
         
+        console.error('💬 [CHAT] Mensajes convertidos al formato chat:', historyMessages.length);
+        console.error('💬 [CHAT HISTORY - END] ====================');
         return historyMessages;
       } else {
         if (historyResult.isNewUser) {
-          
+          console.error('💬 [CHAT] Usuario nuevo, sin historial previo');
         } else {
-          
+          console.error('💬 [CHAT] No hay mensajes en el historial');
         }
+        console.error('💬 [CHAT HISTORY - END] ====================');
         return [];
       }
     } catch (error) {
-      
+      console.error('❌ [CHAT] Error cargando historial:', error);
+      console.error('💬 [CHAT HISTORY - END ERROR] ====================');
       return [];
     }
   };
@@ -204,7 +226,16 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
+      console.error('💬 [CHAT MESSAGE - START] ====================');
+      console.error('💬 [CHAT] Enviando mensaje:', messageText);
+      console.error('💬 [CHAT] userId:', userId);
       const response = await sendChatMessage(userToken, messageText, userId);
+      console.error('💬 [CHAT] Respuesta recibida:', {
+        success: response.success,
+        hasResponse: !!response.assistantResponse,
+        responseLength: response.assistantResponse?.length || 0
+      });
+      console.error('💬 [CHAT] Contenido de la respuesta:', response.assistantResponse);
       
       if (response.success && response.assistantResponse) {
         const botMessage: ChatMessage = {
@@ -214,16 +245,21 @@ export default function ChatScreen() {
           timestamp: new Date()
         };
 
+        console.error('✅ [CHAT] Mensaje del bot creado correctamente');
+        console.error('💬 [CHAT MESSAGE - END] ====================');
         setTimeout(() => {
           setMessages(prev => [...prev, botMessage]);
           setIsTyping(false);
         }, 800);
       } else {
         // Error en la respuesta del servicio
+        console.error('❌ [CHAT] Respuesta sin éxito o sin assistantResponse');
         throw new Error('No se pudo obtener respuesta del chat service');
       }
 
     } catch (error) {
+      console.error('❌❌❌ [CHAT] ERROR en envío de mensaje:', error);
+      console.error('💬 [CHAT MESSAGE - END ERROR] ====================');
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: 'Lo siento, no puedo responder en este momento. Por favor, intenta más tarde.',
