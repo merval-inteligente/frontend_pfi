@@ -27,6 +27,7 @@ interface BackendNewsItem {
   scrapingDate?: string;
   publicationDate?: string;
   url?: string;
+  adaptationLevel?: number; // Nivel de adaptación 1-5 (1=fácil, 5=difícil)
   // Campos opcionales alternativos por compatibilidad
   titulo?: string;
   resumen?: string;
@@ -242,6 +243,36 @@ const NewsCard = ({
           })()}
         </TouchableOpacity>
         <View style={styles.newsFooter}>
+          {/* Indicador de nivel de adaptación */}
+          {backendNews.adaptationLevel !== undefined && backendNews.adaptationLevel !== null && (
+            <View style={[styles.adaptationLevelBadge, { 
+              backgroundColor: backendNews.adaptationLevel <= 2 ? '#10b981' + '15' : 
+                               backendNews.adaptationLevel <= 4 ? '#fbbf24' + '15' : 
+                               '#ef4444' + '15',
+              borderColor: backendNews.adaptationLevel <= 2 ? '#10b981' : 
+                          backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
+                          '#ef4444'
+            }]}>
+              <Ionicons 
+                name={backendNews.adaptationLevel <= 2 ? 'school-outline' : 
+                     backendNews.adaptationLevel <= 4 ? 'book-outline' : 
+                     'library-outline'} 
+                size={12} 
+                color={backendNews.adaptationLevel <= 2 ? '#10b981' : 
+                      backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
+                      '#ef4444'} 
+              />
+              <Text style={[styles.adaptationLevelText, { 
+                color: backendNews.adaptationLevel <= 2 ? '#10b981' : 
+                      backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
+                      '#ef4444' 
+              }]}>
+                {backendNews.adaptationLevel <= 2 ? 'Básico' : 
+                 backendNews.adaptationLevel <= 4 ? 'Intermedio' : 
+                 'Avanzado'}
+              </Text>
+            </View>
+          )}
           <View style={[styles.newsImpact, { backgroundColor: '#64748b' + '15' }]}>
             <Ionicons 
               name="newspaper-outline" 
@@ -404,13 +435,11 @@ export default function HomeScreen() {
         try {
           const token = await getStoredToken();
           if (!token) {
-            console.log('⚠️ [STOCKS] No hay token disponible');
             setUserStocks([]);
             return;
           }
           
           // Obtener todos los stocks desde el backend con reintentos
-          console.log('📊 [STOCKS] Obteniendo lista de stocks del backend...');
           const stocksResponse = await getStocks(token);
           
           if (!stocksResponse || !stocksResponse.stocks) {
@@ -424,12 +453,9 @@ export default function HomeScreen() {
             .filter((stock: any) => userFavorites.includes(stock.symbol));
           
           if (favoriteSymbols.length === 0) {
-            console.log('⚠️ [STOCKS] No hay símbolos favoritos en el backend');
             setUserStocks([]);
             return;
           }
-          
-          console.log('📊 [STOCKS] Cargando precios reales para:', favoriteSymbols.map((s: any) => s.symbol));
           
           // Obtener precios con DELAYS entre requests para evitar rate limiting
           const stocksWithPrices = [];
@@ -445,7 +471,6 @@ export default function HomeScreen() {
               const priceData = await getStockPrice(stock.symbol);
               
               if (priceData.success && priceData.data && priceData.data.price !== null && priceData.data.price !== undefined) {
-                console.log(`✅ [STOCK] ${stock.symbol}: $${priceData.data.price} (${priceData.data.changePercent}%)`);
                 stocksWithPrices.push({
                   id: stock.symbol,
                   symbol: stock.symbol,
@@ -469,11 +494,9 @@ export default function HomeScreen() {
           }
           
           if (stocksWithPrices.length === 0) {
-            console.error('❌ [STOCKS] No se pudieron obtener precios válidos del backend');
             setUserStocks([]);
           } else {
             setUserStocks(stocksWithPrices);
-            console.log(`✅ [STOCKS] ${stocksWithPrices.length}/${favoriteSymbols.length} stocks cargados exitosamente`);
           }
           
           // 🕐 Delay final antes de cargar noticias
@@ -504,8 +527,6 @@ export default function HomeScreen() {
             throw new Error('No token available');
           }
           
-          console.log('📰 [DEBUG] Iniciando llamada a getNews del backend...');
-          
           // Reintentos para noticias
           let newsResponse: any = null;
           let retryCount = 0;
@@ -513,7 +534,7 @@ export default function HomeScreen() {
           
           while (retryCount <= maxRetries) {
             try {
-              newsResponse = await getNews(token, 1, 5, 'fecha_scrapeo', 'desc');
+              newsResponse = await getNews(token, 1, 50, 'fecha_scrapeo', 'desc');
               if (newsResponse && newsResponse.success) {
                 break; // Éxito, salir del loop
               }
@@ -533,18 +554,7 @@ export default function HomeScreen() {
             throw new Error('Failed to get news response after retries');
           }
           
-          console.log('📰 [DEBUG] Respuesta completa del backend:', {
-            success: newsResponse.success,
-            hasData: !!newsResponse.data,
-            hasNews: !!newsResponse.data?.news,
-            newsCount: newsResponse.data?.news?.length || 0
-          });
-          
           if (newsResponse.success && newsResponse.data?.news && Array.isArray(newsResponse.data.news)) {
-            console.log('📰 [DEBUG] Noticias recibidas del backend:', {
-              count: newsResponse.data.news.length,
-              totalInResponse: newsResponse.data.total,
-            });
             
             // Filtrar noticias que tengan datos mínimos válidos - versión flexible
             const validNews = newsResponse.data.news.filter((news: any) => {
@@ -556,38 +566,23 @@ export default function HomeScreen() {
               return news && title && content;
             });
             
-            console.log('[DEBUG] Noticias válidas filtradas:', {
-              original: newsResponse.data.news.length,
-              filtered: validNews.length,
-              validTitles: validNews.map((n: any) => n.title || n.titulo || n.headline).slice(0, 3)
-            });
-            
             if (validNews.length > 0) {
               setNews(validNews);
               setNewsSource('backend');
               setLastNewsLoad(now);
             } else {
-              console.error('⚠️ [NEWS] No hay noticias válidas, usando mock');
               throw new Error('No valid news items');
             }
           } else {
-            console.log('⚠️ [DEBUG] Respuesta del backend no válida:', {
-              success: newsResponse?.success,
-              hasData: !!newsResponse?.data,
-              hasNews: !!newsResponse?.data?.news,
-              error: newsResponse?.error
-            });
             throw new Error(newsResponse?.error || 'Error obteniendo noticias del backend');
           }
-        } catch (error) {
-          console.error('🚫 [NEWS] Error cargando noticias del backend:', error);
+        } catch {
           // NO usar mock - dejar noticias vacías
           setNews([]);
           setNewsSource('none');
         }
       } else if (isAuthenticated) {
         // Cache válido, no hacer nada (mantener noticias actuales)
-        console.log('📰 [NEWS] Usando cache de noticias');
       } else {
         // Usuario no autenticado
         setNews([]);
@@ -642,17 +637,14 @@ export default function HomeScreen() {
         try {
           const token = await getStoredToken();
           if (!token) {
-            console.log('⚠️ [RELOAD] No hay token disponible');
             setUserStocks([]);
             return;
           }
           
           try {
-            console.log('🔄 [RELOAD] Recargando stocks del backend...');
             const stocksResponse = await getStocks(token);
             
             if (!stocksResponse || !stocksResponse.stocks) {
-              console.warn('⚠️ [RELOAD] Respuesta inválida del backend');
               setUserStocks([]);
               return;
             }
@@ -690,7 +682,6 @@ export default function HomeScreen() {
             
             const validStocks = stocksWithPrices.filter((s): s is NonNullable<typeof s> => s !== null);
             setUserStocks(validStocks);
-            console.log(`✅ [RELOAD] ${validStocks.length} stocks recargados`);
           } catch (error) {
             console.error('❌ [RELOAD] Error cargando stocks del backend:', error);
             setUserStocks([]);
@@ -715,8 +706,127 @@ export default function HomeScreen() {
     }, [refreshFavorites])
   );
   
+  // 🎯 PERSONALIZACIÓN: Ordenar noticias poniendo primero las de stocks favoritos
+  const sortNewsByFavorites = (newsArray: (MockNewsItem | BackendNewsItem)[]) => {
+    if (!userFavorites || userFavorites.length === 0) return newsArray;
+    
+    return [...newsArray].sort((a, b) => {
+      const aSymbols = (a as any).mervalSymbol || (a as any).empresas_merval || [];
+      const bSymbols = (b as any).mervalSymbol || (b as any).empresas_merval || [];
+      
+      const aHasFavorite = aSymbols.some((symbol: string) => userFavorites.includes(symbol));
+      const bHasFavorite = bSymbols.some((symbol: string) => userFavorites.includes(symbol));
+      
+      if (aHasFavorite && !bHasFavorite) return -1;
+      if (!aHasFavorite && bHasFavorite) return 1;
+      return 0;
+    });
+  };
+
+  // 🎯 PERSONALIZACIÓN: Filtrar y ordenar noticias según nivel de adaptación del usuario
+  const filterNewsByAdaptationLevel = (newsArray: (MockNewsItem | BackendNewsItem)[]) => {
+    // Obtener nivel de conocimiento del usuario del backend (1-5)
+    const userKnowledge = user?.investmentKnowledge || 'intermedio';
+    
+    // Mapear nivel de conocimiento a nivel de adaptación preferido (1-5)
+    let preferredLevel = 3; // Por defecto intermedio
+    if (userKnowledge === 'principiante') {
+      preferredLevel = 1; // Principiante: prefiere nivel 1, acepta hasta 2
+    } else if (userKnowledge === 'intermedio') {
+      preferredLevel = 3; // Intermedio: prefiere nivel 3, acepta hasta 4
+    } else if (userKnowledge === 'avanzado') {
+      preferredLevel = 5; // Avanzado: prefiere nivel 5
+    }
+    
+    // Agrupar noticias por título/contenido para eliminar duplicados
+    const newsMap = new Map<string, BackendNewsItem>();
+    
+    newsArray.forEach((newsItem) => {
+      const backendNews = newsItem as BackendNewsItem;
+      const title = backendNews.title || backendNews.titulo || '';
+      
+      // Usar título como clave única
+      const key = title.toLowerCase().trim();
+      
+      if (!key) return; // Ignorar noticias sin título
+      
+      const existingNews = newsMap.get(key);
+      const currentLevel = backendNews.adaptationLevel || preferredLevel;
+      
+      if (!existingNews) {
+        // Primera vez que vemos esta noticia
+        newsMap.set(key, backendNews);
+      } else {
+        // Ya existe esta noticia, decidir cuál versión mantener
+        const existingLevel = existingNews.adaptationLevel || preferredLevel;
+        
+        // Calcular qué versión está más cerca del nivel preferido del usuario
+        const currentDistance = Math.abs(currentLevel - preferredLevel);
+        const existingDistance = Math.abs(existingLevel - preferredLevel);
+        
+        if (currentDistance < existingDistance) {
+          // La versión actual está más cerca del nivel del usuario
+          newsMap.set(key, backendNews);
+        }
+      }
+    });
+    
+    const uniqueNews = Array.from(newsMap.values());
+    
+    return uniqueNews;
+  };
+
+  // 🎯 PERSONALIZACIÓN: Mensaje sugerido según perfil de riesgo
+  const getRiskBasedMessage = () => {
+    const risk = user?.riskAppetite || 'moderado';
+    const knowledge = user?.investmentKnowledge || 'intermedio';
+    
+    if (risk === 'conservador') {
+      if (knowledge === 'principiante') {
+        return {
+          icon: '🛡️',
+          title: 'Perfil Conservador',
+          message: 'Recomendamos: Acciones estables con dividendos regulares como GGAL, BMA o PAMP. Prioriza la seguridad sobre grandes ganancias.'
+        };
+      }
+      return {
+        icon: '�️',
+        title: 'Estrategia Conservadora',
+        message: 'Para tu perfil: Diversifica en blue chips (empresas grandes y estables). Busca acciones con PE bajo, dividendos consistentes y poca volatilidad.'
+      };
+    } else if (risk === 'agresivo') {
+      if (knowledge === 'avanzado') {
+        return {
+          icon: '�',
+          title: 'Perfil Agresivo',
+          message: 'Estrategia recomendada: Aprovecha la volatilidad con trading activo. Considera small caps, stocks con alto beta y movimientos >5% diarios.'
+        };
+      }
+      return {
+        icon: '🚀',
+        title: 'Inversión Agresiva',
+        message: 'Para tu perfil: Stocks de crecimiento y empresas en expansión. Ten presente que mayor potencial de ganancia = mayor riesgo de pérdida.'
+      };
+    }
+    // moderado
+    if (knowledge === 'principiante') {
+      return {
+        icon: '⚖️',
+        title: 'Perfil Moderado',
+        message: 'Recomendamos: Mezcla de acciones estables (60%) y de crecimiento (40%). Ejemplo: GGAL + YPF + CEPU.'
+      };
+    }
+    return {
+      icon: '⚖️',
+      title: 'Estrategia Balanceada',
+      message: 'Para tu perfil moderado: Combina value stocks (estabilidad) con growth stocks (potencial). Diversifica por sectores: energía, finanzas, tecnología.'
+    };
+  };
+
   const displayedStocks = showAllStocks ? (userStocks || []) : (userStocks || []).slice(0, 3);
-  const displayedNews = showAllNews ? (news || []) : (news || []).slice(0, 2);
+  const displayedNews = showAllNews 
+    ? sortNewsByFavorites(filterNewsByAdaptationLevel(news || [])) 
+    : sortNewsByFavorites(filterNewsByAdaptationLevel(news || [])).slice(0, 2);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('es-AR').format(num);
@@ -726,50 +836,93 @@ export default function HomeScreen() {
     return `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
   };
 
+  // 🎯 PERSONALIZACIÓN: Mensaje de bienvenida según nivel de conocimiento
+  const getWelcomeMessage = () => {
+    const knowledge = user?.investmentKnowledge || 'intermedio';
+    const name = user?.name?.split(' ')[0] || 'Usuario';
+    
+    switch(knowledge.toLowerCase()) {
+      case 'principiante':
+        return `¡Hola ${name}! 👋 Aquí tienes un resumen simple de tus inversiones`;
+      case 'avanzado':
+        return `Hola ${name} 📈 Dashboard técnico de tu portfolio`;
+      case 'intermedio':
+      default:
+        return `Bienvenido ${name} 📊 Análisis de tus posiciones favoritas`;
+    }
+  };
+
   // Función para obtener el sentimiento del mercado basado en el MERVAL
+  //  PERSONALIZADO según nivel de conocimiento del usuario
   const getMarketSentiment = () => {
     // Usar mervalChange si está disponible (datos reales), sino usar marketData (mock)
     const change = mervalChange !== null ? mervalChange : marketData?.mervalIndex.percentageChange || 0;
+    const knowledge = user?.investmentKnowledge || 'intermedio';
+    
+    // Generar descripción adaptada al nivel de conocimiento
+    const getDescription = (baseDesc: string, technicalDesc: string) => {
+      if (knowledge === 'principiante') {
+        return baseDesc;
+      } else if (knowledge === 'avanzado') {
+        return technicalDesc;
+      }
+      return baseDesc; // Intermedio usa descripción base
+    };
     
     if (change > 1) {
       return {
         title: 'Muy Optimista 🚀',
-        description: 'El MERVAL sube fuertemente. Momento favorable para el mercado argentino.',
+        description: getDescription(
+          `El MERVAL subió ${change.toFixed(2)}%. Esto significa que el mercado está muy optimista. Tus acciones favoritas probablemente subieron.`,
+          `MERVAL +${change.toFixed(2)}% | Momentum alcista fuerte. Mercado en tendencia positiva, monitorear posibles tomas de ganancia.`
+        ),
         emoji: '📈',
-        color: '#10b981', // Verde fuerte
-        imageUri: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' // Gráfico subiendo
+        color: '#10b981',
+        imageUri: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
       };
     } else if (change > 0) {
       return {
         title: 'Optimista 📊',
-        description: 'El mercado muestra una tendencia positiva generalizada.',
+        description: getDescription(
+          `El mercado sube ${change.toFixed(2)}%. Es un buen momento, las acciones en general están subiendo.`,
+          `MERVAL +${change.toFixed(2)}% | Tendencia positiva generalizada. Volumen normal, continuidad alcista probable.`
+        ),
         emoji: '📈',
-        color: '#22c55e', // Verde medio
+        color: '#22c55e',
         imageUri: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
       };
     } else if (change === 0) {
       return {
         title: 'Neutral ⚖️',
-        description: 'El mercado se mantiene estable, sin cambios significativos.',
+        description: getDescription(
+          'El mercado está estable hoy, sin cambios importantes. Es un día tranquilo.',
+          'MERVAL sin cambios | Mercado en consolidación. Bajo volumen, esperando catalizadores.'
+        ),
         emoji: '➡️',
-        color: '#64748b', // Gris
+        color: '#64748b',
         imageUri: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
       };
     } else if (change > -1) {
       return {
         title: 'Cauteloso ⚠️',
-        description: 'El mercado presenta leve volatilidad. Mantente informado sobre las tendencias.',
+        description: getDescription(
+          `El mercado bajó ${Math.abs(change).toFixed(2)}%. Hay un poco de volatilidad, mantente atento a tus inversiones.`,
+          `MERVAL ${change.toFixed(2)}% | Corrección leve. Volatilidad moderada, vigilar niveles de soporte clave.`
+        ),
         emoji: '📉',
-        color: '#f59e0b', // Amarillo/naranja
+        color: '#f59e0b',
         imageUri: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
       };
     } else {
       return {
         title: 'Bajista 📉',
-        description: 'El MERVAL cae significativamente. Se recomienda precaución en las inversiones.',
+        description: getDescription(
+          `El MERVAL cayó ${Math.abs(change).toFixed(2)}%. El mercado está bajando fuerte, considera revisar tus posiciones.`,
+          `MERVAL ${change.toFixed(2)}% | Presión vendedora significativa. Alto volumen, posible continuación bajista a corto plazo.`
+        ),
         emoji: '🔻',
-        color: '#ef4444', // Rojo
-        imageUri: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' // Gráfico bajando
+        color: '#ef4444',
+        imageUri: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
       };
     }
   };
@@ -818,13 +971,13 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Greeting */}
+          {/* Greeting - Personalizado según nivel de conocimiento */}
           <Text style={[styles.greeting, { 
             color: colors.text,
             paddingHorizontal: responsivePadding.horizontal,
             fontSize: IS_DESKTOP_SCREEN ? 20 : 18
           }]}>
-            ¡Hola {user?.name || 'Usuario'}! ¿Cómo anda el mercado hoy?
+            {getWelcomeMessage()}
           </Text>
 
         {/* MERVAL Card */}
@@ -939,6 +1092,30 @@ export default function HomeScreen() {
             <Text style={[styles.editPreferencesText, { color: colors.text }]}>Editar</Text>
           </TouchableOpacity>
         </View>
+        
+        {/* 🎯 Consejo personalizado según perfil de riesgo */}
+        {user?.riskAppetite && (() => {
+          const tipData = getRiskBasedMessage();
+          return (
+            <View style={[styles.tipCard, { 
+              backgroundColor: colors.card, 
+              borderColor: colors.cardBorder,
+              borderLeftColor: tipData.icon === '🛡️' ? '#10b981' : tipData.icon === '🚀' ? '#ef4444' : '#f59e0b',
+              marginHorizontal: responsivePadding.horizontal,
+              marginBottom: 12
+            }]}>
+              <View style={styles.tipHeader}>
+                <Text style={{ fontSize: 20, marginRight: 8 }}>{tipData.icon}</Text>
+                <Text style={[styles.tipTitle, { color: colors.text }]}>
+                  {tipData.title}
+                </Text>
+              </View>
+              <Text style={[styles.tipText, { color: colors.subtitle }]}>
+                {tipData.message}
+              </Text>
+            </View>
+          );
+        })()}
         
         {displayedStocks && displayedStocks.length > 0 ? (
           <>
@@ -1370,6 +1547,7 @@ const styles = StyleSheet.create({
   newsFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   newsImpact: {
     flexDirection: 'row',
@@ -1382,6 +1560,19 @@ const styles = StyleSheet.create({
   newsImpactText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  adaptationLevelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1,
+  },
+  adaptationLevelText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   
   // Show more button styles
@@ -1400,6 +1591,27 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  
+  // Tip card personalizado
+  tipCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+  },
+  tipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  tipTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tipText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   
   // Web-specific styles

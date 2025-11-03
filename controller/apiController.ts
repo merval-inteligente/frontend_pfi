@@ -19,12 +19,10 @@ const CACHE_DURATION = {
 const getFromCache = (key: string): any | null => {
   const entry = apiCache.get(key);
   if (entry && Date.now() - entry.timestamp < entry.expiresIn) {
-    console.log(`📦 [CACHE] Hit para: ${key}`);
     return entry.data;
   }
   if (entry) {
     apiCache.delete(key); // Limpiar cache expirado
-    console.log(`🗑️ [CACHE] Expirado y limpiado: ${key}`);
   }
   return null;
 };
@@ -36,7 +34,6 @@ const saveToCache = (key: string, data: any, duration: number): void => {
     timestamp: Date.now(),
     expiresIn: duration
   });
-  console.log(`💾 [CACHE] Guardado: ${key} (${duration/1000}s)`);
 };
 
 // Función para limpiar cache de usuario específico
@@ -45,7 +42,6 @@ const clearUserCache = (userId?: string): void => {
     !userId || key.includes(userId)
   );
   keysToDelete.forEach(key => apiCache.delete(key));
-  console.log(`🧹 [CACHE] Limpiado ${keysToDelete.length} entradas`);
 };
 
 // Interfaces para tipos
@@ -80,7 +76,6 @@ interface RemoveFavoriteSectorResponse {
 
 export const signUp = async (userData: any) => {
   let url = urlWebServices.signUp;
-  console.log('🔐 [AUTH] Iniciando registro de usuario:', { email: userData.email, hasAvatar: !!userData.avatar });
 
   try {
     // Si incluye avatar, usar FormData
@@ -116,7 +111,6 @@ export const signUp = async (userData: any) => {
         throw new Error(data.message || 'Error en el registro');
       }
 
-      console.log('✅ [AUTH] Usuario registrado exitosamente con avatar');
       return data;
     } else {
       // Registro sin avatar - JSON normal
@@ -163,7 +157,6 @@ export const signUp = async (userData: any) => {
         throw new Error(data.message || 'Error en el registro');
       }
 
-      console.log('✅ [AUTH] Usuario registrado exitosamente sin avatar');
       return data;
     }
   } catch (error: any) {
@@ -183,7 +176,6 @@ export const signUp = async (userData: any) => {
 
 export const signIn = async userData => {
   let url = urlWebServices.signIn;
-  console.log('🔐 [AUTH] Iniciando login de usuario:', { email: userData.email });
 
   try {
     let response = await fetch(url, {
@@ -204,7 +196,6 @@ export const signIn = async userData => {
       throw new Error(data.message || 'Error en el login');
     }
     
-    console.log('✅ [AUTH] Login exitoso, token generado');
     return data;
   } catch (error) {
     throw error;
@@ -547,7 +538,6 @@ export const deleteAvatar = async token => {
  */
 export const getUserPreferences = async (token) => {
   const url = urlWebServices.getUserPreferences;
-  console.log('⚙️ [PREFERENCES] Obteniendo preferencias del usuario');
 
   try {
     const response = await fetch(url, {
@@ -563,7 +553,6 @@ export const getUserPreferences = async (token) => {
     }
 
     const data = await response.json();
-    console.log('✅ [PREFERENCES] Preferencias obtenidas correctamente');
     return data;
   } catch (error) {
     throw error;
@@ -640,7 +629,6 @@ export const patchUserPreferences = async (changes, token) => {
  */
 export const addToFavorites = async (symbol, token) => {
   const url = urlWebServices.addToFavorites;
-  console.log('⭐ [FAVORITES] Agregando a favoritos:', { symbol });
 
   try {
     const response = await fetch(url, {
@@ -667,7 +655,6 @@ export const addToFavorites = async (symbol, token) => {
       throw new Error(data.message || 'Error agregando a favoritos');
     }
 
-    console.log('✅ [FAVORITES] Agregado exitosamente a favoritos:', { symbol });
     return {
       success: true,
       message: data.message,
@@ -687,7 +674,6 @@ export const addToFavorites = async (symbol, token) => {
  */
 export const removeFromFavorites = async (symbol, token) => {
   const url = `${urlWebServices.removeFromFavorites}${symbol}`;
-  console.log('🗑️ [FAVORITES] Removiendo de favoritos:', { symbol });
 
   try {
     const response = await fetch(url, {
@@ -703,7 +689,6 @@ export const removeFromFavorites = async (symbol, token) => {
     }
 
     const data = await response.json();
-    console.log('✅ [FAVORITES] Removido exitosamente de favoritos:', { symbol });
     return {
       success: true,
       message: data.message,
@@ -776,9 +761,8 @@ export const getSectors = async (token: string) => {
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
-      } catch (parseError) {
+      } catch {
         // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
-        console.warn('No se pudo parsear respuesta de error como JSON');
       }
       throw new Error(errorMessage);
     }
@@ -790,7 +774,6 @@ export const getSectors = async (token: string) => {
       message: data.message
     };
   } catch (error) {
-    console.error('❌ Error en getSectors:', error);
     throw error;
   }
 };
@@ -810,7 +793,6 @@ export const getStocks = async (token: string) => {
   }
 
   const url = urlWebServices.getStocks;
-  console.log('📈 [STOCKS] Obteniendo stocks del backend');
 
   try {
     const response = await makeRequestWithRetry(url, {
@@ -826,9 +808,8 @@ export const getStocks = async (token: string) => {
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
-      } catch (parseError) {
+      } catch {
         // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
-        console.warn('No se pudo parsear respuesta de error como JSON');
       }
       throw new Error(errorMessage);
     }
@@ -842,11 +823,9 @@ export const getStocks = async (token: string) => {
     
     // Guardar en cache
     saveToCache(cacheKey, result, CACHE_DURATION.STOCKS);
-    console.log('✅ [STOCKS] Stocks obtenidos correctamente:', { count: result.count });
     
     return result;
   } catch (error) {
-    console.error('❌ Error en getStocks:', error);
     throw error;
   }
 };
@@ -861,16 +840,12 @@ export const getMervalPrice = async () => {
   // Cache muy corto para datos en tiempo real (30 segundos)
   const cachedData = getFromCache(cacheKey);
   if (cachedData) {
-    console.error('📊 [MERVAL] Usando datos desde cache');
     return cachedData;
   }
 
   const url = urlWebServices.getMervalPrice;
-  console.error('📊 [MERVAL - START] ====================');
-  console.error('📊 [MERVAL] URL:', url);
 
   try {
-    console.error('📊 [MERVAL] Haciendo request...');
     const response = await makeRequestWithRetry(url, {
       method: 'GET',
       headers: {
@@ -878,25 +853,17 @@ export const getMervalPrice = async () => {
       }
     });
 
-    console.error('📊 [MERVAL] Response status:', response.status);
-    console.error('📊 [MERVAL] Response ok:', response.ok);
-
     if (!response.ok) {
-      console.error('❌ [MERVAL] Response NO OK, status:', response.status);
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
-        console.error('❌ [MERVAL] Error del servidor:', errorData);
       } catch (parseError) {
-        console.error('❌ [MERVAL] No se pudo parsear error');
       }
       throw new Error(errorMessage);
     }
 
-    console.error('📊 [MERVAL] Parseando JSON...');
     const data = await response.json();
-    console.error('📊 [MERVAL] Data recibida:', JSON.stringify(data, null, 2));
     
     if (data.success && data.data) {
       const result = {
@@ -921,21 +888,12 @@ export const getMervalPrice = async () => {
       
       // Guardar en cache por 30 segundos
       saveToCache(cacheKey, result, 30000);
-      console.error('✅ [MERVAL] Precio obtenido correctamente:', {
-        price: result.data.price,
-        change: result.data.change,
-        changePercent: result.data.changePercent
-      });
-      console.error('📊 [MERVAL - END] ====================');
       
       return result;
     } else {
-      console.error('❌ [MERVAL] Respuesta sin success o sin data');
       throw new Error(data.message || 'Error al obtener precio del MERVAL');
     }
   } catch (error) {
-    console.error('❌❌❌ [MERVAL] ERROR:', error);
-    console.error('📊 [MERVAL - END ERROR] ====================');
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener precio del MERVAL'
@@ -1010,7 +968,6 @@ export const getStockPrice = async (symbol: string) => {
       throw new Error(data.message || 'Error al obtener precio de la acción');
     }
   } catch (error) {
-    console.error(`❌ Error obteniendo precio de ${symbol}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener precio de la acción'
@@ -1035,7 +992,6 @@ export const getStockTechnical = async (symbol: string) => {
   const url = `${urlWebServices.getStockTechnical}${symbol}/technical`;
 
   try {
-    console.error(`📊 [TECHNICAL] Obteniendo análisis técnico de ${symbol}...`);
     
     const response = await makeRequestWithRetry(url, {
       method: 'GET',
@@ -1058,13 +1014,6 @@ export const getStockTechnical = async (symbol: string) => {
     const data = await response.json();
     
     if (data.success && data.data) {
-      console.error(`✅ [TECHNICAL] Análisis de ${symbol}:`, {
-        rsi: data.data.indicators?.rsi,
-        rsiSignal: data.data.indicators?.rsiSignal,
-        sma50: data.data.movingAverages?.sma50,
-        support: data.data.support?.level1,
-        resistance: data.data.resistance?.level1
-      });
       
       const result = {
         success: true,
@@ -1110,7 +1059,6 @@ export const getStockTechnical = async (symbol: string) => {
       throw new Error(data.message || 'Error al obtener análisis técnico');
     }
   } catch (error) {
-    console.error(`❌ [TECHNICAL] Error obteniendo análisis de ${symbol}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error al obtener análisis técnico'
@@ -1133,7 +1081,6 @@ export const getUserFavorites = async (token: string) => {
   }
 
   const url = urlWebServices.getUserFavorites;
-  console.log('⭐ [FAVORITES] Obteniendo lista de favoritos del usuario');
 
   try {
     const response = await makeRequestWithRetry(url, {
@@ -1149,7 +1096,6 @@ export const getUserFavorites = async (token: string) => {
       
       // Manejo específico para error 429 (Too Many Requests)
       if (response.status === 429) {
-        console.warn('⚠️ Rate limit alcanzado, reintentando en 2 segundos...');
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Reintentar una vez
@@ -1175,9 +1121,8 @@ export const getUserFavorites = async (token: string) => {
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
-      } catch (parseError) {
+      } catch {
         // Si no se puede parsear como JSON, usar el mensaje de estado HTTP
-        console.warn('No se pudo parsear respuesta de error como JSON');
       }
       throw new Error(errorMessage);
     }
@@ -1190,11 +1135,9 @@ export const getUserFavorites = async (token: string) => {
     
     // Guardar en cache
     saveToCache(cacheKey, result, CACHE_DURATION.FAVORITES);
-    console.log('✅ [FAVORITES] Favoritos obtenidos correctamente:', { count: Object.keys(result.favorites || {}).length });
     
     return result;
   } catch (error) {
-    console.error('❌ Error en getUserFavorites:', error);
     throw error;
   }
 };
@@ -1213,7 +1156,6 @@ export const getAlerts = async () => {
   }
 
   const url = urlWebServices.getAlerts;
-  console.log('🔔 [ALERTS] Obteniendo alertas del sistema');
 
   try {
     const response = await makeRequestWithRetry(url, {
@@ -1238,11 +1180,9 @@ export const getAlerts = async () => {
     
     // Guardar en cache (30 segundos para alertas)
     saveToCache(cacheKey, alerts, 30000);
-    console.log(`✅ [ALERTS] ${alerts.length} alertas obtenidas correctamente`);
     
     return alerts;
   } catch (error) {
-    console.error('❌ Error en getAlerts:', error);
     throw error;
   }
 };
@@ -1288,7 +1228,6 @@ export const addStockToFavorites = async (symbol: string, token: string) => {
       addedSymbol: symbol
     };
   } catch (error) {
-    console.error('❌ Error en addStockToFavorites:', error);
     throw error;
   }
 };
@@ -1342,7 +1281,6 @@ export const addSectorToFavorites = async (sectorName: string, token: string) =>
       addedSymbols: data.data.addedSymbols || []
     };
   } catch (error: any) {
-    console.error(`❌ Error en addSectorToFavorites para sector "${sectorName}":`, error);
     
     // Mejorar el mensaje de error para diferentes casos
     const errorMessage = error.message || 'Error desconocido';
@@ -1387,8 +1325,7 @@ export const isSymbolInFavorites = async (symbol: string, token: string) => {
     const response = await getUserPreferences(token);
     const favoriteStocks = response.data.preferences.favoriteStocks || [];
     return favoriteStocks.includes(symbol);
-  } catch (error) {
-    console.error('Error verificando favoritos:', error);
+  } catch {
     return false;
   }
 };
@@ -1402,8 +1339,7 @@ export const getFavoriteStocks = async (token: string) => {
   try {
     const response = await getUserPreferences(token);
     return response.data.preferences.favoriteStocks || [];
-  } catch (error) {
-    console.error('Error obteniendo favoritos:', error);
+  } catch {
     return [];
   }
 };
@@ -1504,7 +1440,6 @@ export const removeFavoriteStock = async (token: string, symbol: string): Promis
 
     return data;
   } catch (error) {
-    console.error('❌ Error eliminando stock de favoritos:', error);
     throw error;
   }
 };
@@ -1531,7 +1466,6 @@ export const removeFavoriteSector = async (token: string, sector: string): Promi
 
     return data;
   } catch (error) {
-    console.error('❌ Error eliminando sector de favoritos:', error);
     throw error;
   }
 };
@@ -1750,18 +1684,12 @@ export const sendChatMessage = async (token: string, message: string, userId: st
  */
 export const getChatHistory = async (token: string, userId: string, limit: number = 50) => {
   const url = `${urlWebServices.chatGetHistory}/${userId}?limit=${limit}`;
-  console.error('💬 [API - GET HISTORY] ====================');
-  console.error('💬 [API] URL:', url);
-  console.error('💬 [API] userId:', userId);
-  console.error('💬 [API] limit:', limit);
 
   try {
     if (!token || !userId) {
-      console.error('❌ [API] Sin token o userId');
       throw new Error('No hay autenticación disponible');
     }
 
-    console.error('💬 [API] Haciendo request...');
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1769,12 +1697,8 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
       }
     });
 
-    console.error('💬 [API] Response status:', response.status);
-    console.error('💬 [API] Response ok:', response.ok);
-
     // Si es 404, significa que el usuario no tiene historial (usuario nuevo)
     if (response.status === 404) {
-      console.error('💬 [API] Status 404 - Usuario nuevo sin historial');
       return {
         success: true,
         messages: [],
@@ -1784,13 +1708,10 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
     }
 
     if (!response.ok) {
-      console.error('❌ [API] Response NO OK, status:', response.status);
       throw new Error(`Get history failed: ${response.status}`);
     }
 
-    console.error('💬 [API] Parseando JSON...');
     const data = await response.json();
-    console.error('💬 [API] Data recibida:', JSON.stringify(data, null, 2));
     
     const result = {
       success: true,
@@ -1798,22 +1719,10 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
       total: data.total_messages || data.messages?.length || 0,
       isNewUser: false
     };
-    console.error('💬 [API] Resultado a devolver:', {
-      success: result.success,
-      messagesCount: result.messages.length,
-      total: result.total,
-      isNewUser: result.isNewUser
-    });
-    console.error('✅ [API] Historial obtenido correctamente');
-    console.error('💬 [API - GET HISTORY END] ====================');
     return result;
   } catch (error) {
-    console.error('❌❌❌ [API] ERROR en getChatHistory:', error);
-    console.error('💬 [API] Error message:', error instanceof Error ? error.message : 'Unknown error');
     // Si es un error de red o 404, tratarlo como usuario nuevo
     if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
-      console.error('💬 [API] Tratando como usuario nuevo por 404');
-      console.error('💬 [API - GET HISTORY END] ====================');
       return {
         success: true,
         messages: [],
@@ -1821,7 +1730,6 @@ export const getChatHistory = async (token: string, userId: string, limit: numbe
         isNewUser: true
       };
     }
-    console.error('💬 [API - GET HISTORY END ERROR] ====================');
     return { success: false, error: error instanceof Error ? error.message : 'Error al obtener historial' };
   }
 };
@@ -1834,7 +1742,6 @@ export const initializeChatService = async (userToken: string) => {
     // Verificar que el chat service esté disponible
     const healthCheck = await checkChatHealth();
     if (!healthCheck.success) {
-      console.warn('⚠️ Chat Service no disponible, usando modo fallback');
       // En lugar de fallar, retornamos éxito pero con advertencia
       return { 
         success: true, 
@@ -1844,8 +1751,7 @@ export const initializeChatService = async (userToken: string) => {
     }
 
     return { success: true, fallbackMode: false };
-  } catch (error) {
-    console.error('❌ Error inicializando chat service:', error);
+  } catch {
     // Usar modo fallback en caso de error
     return { 
       success: true, 
@@ -1897,38 +1803,20 @@ const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetrie
       // Agregar delay progresivo entre intentos - más conservador
       if (attempt > 1) {
         const delay = Math.min(3000 * Math.pow(2, attempt - 2), 15000); // Exponential backoff, máx 15s
-        console.log(`🔄 [RETRY] Intento ${attempt}/${maxRetries + 1}, esperando ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
-      console.log(`🌐 [REQUEST] ${attempt > 1 ? 'Reintentando' : 'Iniciando'} request a ${url.substring(url.lastIndexOf('/'))}`);
       const response = await fetch(url, options);
       
       // Si es rate limit (429), esperar más tiempo antes de reintentar
       if (response.status === 429 && attempt <= maxRetries) {
-        console.warn(`⏳ [RATE_LIMIT] HTTP 429 detectado, esperando antes de reintentar...`);
         await new Promise(resolve => setTimeout(resolve, 10000)); // Esperar 10 segundos
         continue;
       }
       
-      // Log del resultado
-      if (response.ok) {
-        console.log(`✅ [REQUEST] Exitoso (${response.status}) - ${url.substring(url.lastIndexOf('/'))}`);
-      } else {
-        console.warn(`⚠️ [REQUEST] Respuesta no OK (${response.status}) - ${url.substring(url.lastIndexOf('/'))}`);
-      }
-      
       return response;
     } catch (error) {
-      console.error(`❌ [REQUEST] Error en intento ${attempt}/${maxRetries + 1}:`, error instanceof Error ? error.message : 'Error desconocido');
-      
-      // Identificar tipo de error
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        console.error('🔌 [NETWORK] Error de red - Backend posiblemente no disponible');
-      }
-      
       if (attempt === maxRetries + 1) {
-        console.error(`❌ [REQUEST] Todos los reintentos fallaron para ${url}`);
         throw error;
       }
     }
@@ -1942,7 +1830,6 @@ const makeRequestWithRetry = async (url: string, options: RequestInit, maxRetrie
  */
 export const getNews = async (token: string, page: number = 1, limit: number = 20, sortBy: string = 'fecha_scrapeo', sortOrder: string = 'desc') => {
   const url = `${urlWebServices.baseUrl}api/news?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`;
-  console.log('📰 [NEWS] Obteniendo noticias:', { page, limit, sortBy, sortOrder });
 
   try {
     if (!token) {
@@ -1966,7 +1853,6 @@ export const getNews = async (token: string, page: number = 1, limit: number = 2
     }
 
     const data = await response.json();
-    console.log('✅ [NEWS] Noticias obtenidas correctamente:', { total: data.data?.total || 0, articles: data.data?.news?.length || 0 });
     return {
       success: true,
       data: data.data,
@@ -2206,16 +2092,12 @@ export const getNewsById = async (token: string, newsId: string) => {
 export const testNewsEndpoint = async () => {
   const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YjYxMjJiOTc5MThjZTIxYzVlZmQxZiIsImVtYWlsIjoibmljb2xhc3BldGNvZmZAZ21haWwuY29tIiwiaWF0IjoxNzU2NzczNjY4LCJleHAiOjE3NTczNzg0Njh9.zJFKytB9P-Fkl3QaU9R8jNHeACivyZp1GLhS4G3xIWw';
   
-  console.log('🧪 === INICIANDO TEST DE NOTICIAS ===');
-  console.log('🔗 URL Base:', urlWebServices.baseUrl);
   
   // Test 1: Verificar conectividad del backend
   try {
-    console.log('🔄 Test 1: Verificando conectividad del backend...');
     const baseResponse = await fetch(urlWebServices.baseUrl, {
       method: 'GET'
     });
-    console.log('✅ Backend disponible - Status:', baseResponse.status);
   } catch (error) {
     console.error('❌ Backend no disponible:', error);
     return;
@@ -2223,8 +2105,7 @@ export const testNewsEndpoint = async () => {
 
   // Test 2: Probar endpoint de noticias
   const newsUrl = `${urlWebServices.baseUrl}api/news?page=1&limit=5`;
-  console.log('🔄 Test 2: Probando endpoint de noticias...');
-  console.log('🌐 URL completa:', newsUrl);
+  
   
   try {
     const response = await fetch(newsUrl, {
@@ -2235,15 +2116,11 @@ export const testNewsEndpoint = async () => {
       }
     });
 
-    console.log('📋 Response Status:', response.status);
-    console.log('📋 Response StatusText:', response.statusText);
-    console.log('📋 Response Headers:', JSON.stringify([...response.headers.entries()]));
+    
 
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ SUCCESS! Datos recibidos:');
-      console.log('📰 Cantidad de noticias:', data.data?.news?.length || 0);
-      console.log('📊 Estructura de respuesta:', Object.keys(data));
+     
       if (data.data?.news && data.data.news.length > 0) {
         console.log('📝 Primera noticia:', {
           titulo: data.data.news[0].titulo,
@@ -2257,7 +2134,6 @@ export const testNewsEndpoint = async () => {
       
       // Test 3: Verificar endpoint alternativo
       if (response.status === 404) {
-        console.log('🔄 Test 3: Probando endpoints alternativos...');
         
         const alternativeUrls = [
           `${urlWebServices.baseUrl}news`,
@@ -2267,7 +2143,7 @@ export const testNewsEndpoint = async () => {
         
         for (const altUrl of alternativeUrls) {
           try {
-            console.log('🌐 Probando:', altUrl);
+           
             const altResponse = await fetch(altUrl, {
               method: 'GET',
               headers: {
@@ -2275,9 +2151,9 @@ export const testNewsEndpoint = async () => {
                 'Content-Type': 'application/json'
               }
             });
-            console.log(`📋 ${altUrl} - Status:`, altResponse.status);
+            
             if (altResponse.ok) {
-              console.log('✅ ¡Endpoint alternativo encontrado!');
+              
               break;
             }
           } catch (altError) {
@@ -2290,6 +2166,6 @@ export const testNewsEndpoint = async () => {
     console.error('❌ Error en test de noticias:', error);
   }
   
-  console.log('🧪 === FIN DEL TEST ===');
+  
 };
 

@@ -2,6 +2,7 @@ import { AlertCreator } from '@/components/AlertCreator';
 import { AlertSuggestions } from '@/components/AlertSuggestions';
 import { getBottomPaddingForTabBar, getHeaderPaddingTop, ResponsiveContainer, useResponsivePadding } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getAlerts } from '@/controller/apiController';
@@ -152,6 +153,7 @@ const AlertItem = ({ alert, onToggle, onEdit }: { alert: Alert; onToggle: (id: s
 export default function AlertsScreen() {
   const { colorScheme } = useTheme();
   const colors = Colors[colorScheme];
+  const { user } = useAuth();
   const { userFavorites } = usePreferencesSync();
   const [alertList, setAlertList] = useState<Alert[]>([]);
   const [showCreator, setShowCreator] = useState(false);
@@ -173,17 +175,7 @@ export default function AlertsScreen() {
       }
       setError(null);
       
-      console.log('🔔 [ALERTS] Cargando alertas desde API...');
       const alerts = await getAlerts();
-      
-      // Verificar IDs únicos
-      const ids = alerts.map((a: Alert) => a.id);
-      const uniqueIds = new Set(ids);
-      if (ids.length !== uniqueIds.size) {
-        console.warn('⚠️ [ALERTS] Se detectaron IDs duplicados');
-        const duplicates = ids.filter((id: string, index: number) => ids.indexOf(id) !== index);
-        console.warn('Duplicados:', duplicates);
-      }
       
       // Ordenar por fecha de creación (más recientes primero)
       const sortedAlerts = alerts.sort((a: Alert, b: Alert) => {
@@ -193,9 +185,7 @@ export default function AlertsScreen() {
       });
       
       setAlertList(sortedAlerts);
-      console.log(`✅ [ALERTS] ${sortedAlerts.length} alertas cargadas correctamente`);
-    } catch (err) {
-      console.error('❌ Error al cargar alertas:', err);
+    } catch {
       setError('No se pudieron cargar las alertas. Verifica tu conexión.');
       // Mantener el array vacío en caso de error
       setAlertList([]);
@@ -229,7 +219,6 @@ export default function AlertsScreen() {
 
   const handleEditAlert = (alert: Alert) => {
     // Por ahora solo mostramos la info, se puede extender para editar
-    console.log('Editar alerta:', alert);
   };
 
   const handleRefresh = () => {
@@ -499,6 +488,7 @@ export default function AlertsScreen() {
         onClose={() => setShowCreator(false)}
         onSave={handleSaveAlert}
         stocks={userFavorites}
+        userRiskProfile={(user?.riskAppetite as 'conservador' | 'moderado' | 'agresivo') || 'moderado'}
       />
       </ResponsiveContainer>
     </SafeAreaView>

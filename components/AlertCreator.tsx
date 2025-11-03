@@ -17,13 +17,15 @@ interface AlertCreatorProps {
   onClose: () => void;
   onSave: (alert: any) => void;
   stocks?: string[]; // Lista de símbolos de acciones disponibles
+  userRiskProfile?: 'conservador' | 'moderado' | 'agresivo'; // Perfil de riesgo del usuario
 }
 
 export const AlertCreator: React.FC<AlertCreatorProps> = ({
   visible,
   onClose,
   onSave,
-  stocks = []
+  stocks = [],
+  userRiskProfile = 'moderado'
 }) => {
   const { colorScheme } = useTheme();
   const colors = Colors[colorScheme];
@@ -35,6 +37,42 @@ export const AlertCreator: React.FC<AlertCreatorProps> = ({
   const [timeframe, setTimeframe] = useState<'1h' | '1d' | '1w' | '1m'>('1d');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [customTitle, setCustomTitle] = useState<string>('');
+
+  // Función para obtener umbrales sugeridos según el perfil
+  const getSuggestedThreshold = React.useCallback((type: string, condition: string): string => {
+    if (condition === 'change_percent') {
+      if (userRiskProfile === 'conservador') return '5';
+      if (userRiskProfile === 'moderado') return '7';
+      if (userRiskProfile === 'agresivo') return '10';
+    }
+    if (condition === 'volume_spike') {
+      if (userRiskProfile === 'conservador') return '2';
+      if (userRiskProfile === 'moderado') return '2.5';
+      if (userRiskProfile === 'agresivo') return '3';
+    }
+    return '';
+  }, [userRiskProfile]);
+
+  // Función para obtener prioridad sugerida según perfil
+  const getSuggestedPriority = React.useCallback((): 'low' | 'medium' | 'high' => {
+    if (userRiskProfile === 'conservador') return 'medium';
+    if (userRiskProfile === 'moderado') return 'medium';
+    if (userRiskProfile === 'agresivo') return 'high';
+    return 'medium';
+  }, [userRiskProfile]);
+
+  // Actualizar prioridad sugerida cuando cambia el perfil
+  React.useEffect(() => {
+    setPriority(getSuggestedPriority());
+  }, [getSuggestedPriority]);
+
+  // Auto-completar threshold sugerido cuando cambia la condición
+  React.useEffect(() => {
+    if (!threshold) {
+      const suggested = getSuggestedThreshold(alertType, condition);
+      if (suggested) setThreshold(suggested);
+    }
+  }, [condition, alertType, getSuggestedThreshold, threshold]);
 
   const alertTypes = [
     { value: 'price', label: 'Precio', icon: 'trending-up' },
@@ -261,6 +299,21 @@ export const AlertCreator: React.FC<AlertCreatorProps> = ({
                 {condition === 'change_percent' || condition === 'volume_spike' ? '%' : '$'}
               </Text>
             </View>
+            
+            {/* Sugerencia personalizada según perfil */}
+            {(condition === 'change_percent' || condition === 'volume_spike') && (() => {
+              const suggested = getSuggestedThreshold(alertType, condition);
+              const profileLabel = userRiskProfile === 'conservador' ? '🛡️ Conservador' : 
+                                   userRiskProfile === 'moderado' ? '⚖️ Moderado' : '🚀 Agresivo';
+              return suggested ? (
+                <View style={[styles.suggestionHint, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                  <Ionicons name="bulb-outline" size={16} color={colors.success} />
+                  <Text style={[styles.suggestionText, { color: colors.success }]}>
+                    Sugerido para {profileLabel}: {suggested}%
+                  </Text>
+                </View>
+              ) : null;
+            })()}
 
             {/* Marco Temporal */}
             <Text style={[styles.sectionLabel, { color: colors.text }]}>Marco Temporal</Text>
@@ -517,6 +570,20 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  suggestionHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  suggestionText: {
+    fontSize: 13,
     fontWeight: '600',
   },
 });

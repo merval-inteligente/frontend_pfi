@@ -1,4 +1,5 @@
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getStockPrice, getStocks, getStockTechnical } from '@/controller/apiController';
 import { ExtendedStock, generateMockChartData, getExtendedStock } from '@/services/mockup';
@@ -7,16 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
@@ -24,7 +25,14 @@ export default function StockDetailScreen() {
   const router = useRouter();
   const { symbol } = useLocalSearchParams();
   const { colorScheme } = useTheme();
+  const { user } = useAuth();
   const colors = Colors[colorScheme];
+  
+  // 🎯 PERSONALIZACIÓN: Verificar si mostrar análisis técnico avanzado
+  const shouldShowAdvancedMetrics = () => {
+    const knowledge = user?.investmentKnowledge || 'intermedio';
+    return knowledge === 'avanzado' || knowledge === 'intermedio';
+  };
   
   const [stock, setStock] = useState<ExtendedStock | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +50,7 @@ export default function StockDetailScreen() {
     support1?: number;
     resistance1?: number;
   }>({});
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
 
   useEffect(() => {
     loadStockData();
@@ -347,8 +356,8 @@ export default function StockDetailScreen() {
             </View>
           </View>
 
-          {/* Technical Analysis - RSI */}
-          {technicalData.rsi !== undefined && (
+          {/* Technical Analysis - Solo para usuarios intermedios/avanzados */}
+          {shouldShowAdvancedMetrics() && technicalData.rsi !== undefined && (
             <View style={[styles.technicalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Análisis Técnico</Text>
               <Text style={[styles.technicalDescription, { color: colors.subtitle }]}>
@@ -359,7 +368,19 @@ export default function StockDetailScreen() {
                 {/* RSI */}
                 <View style={styles.technicalItemFull}>
                   <View style={styles.technicalHeader}>
-                    <Text style={[styles.technicalLabel, { color: colors.text }]}>RSI (14)</Text>
+                    <View style={styles.indicatorTitleRow}>
+                      <Text style={[styles.technicalLabel, { color: colors.text }]}>RSI (14)</Text>
+                      <TouchableOpacity 
+                        style={[styles.infoButton, { backgroundColor: `${colors.success}15` }]}
+                        onPress={() => setExpandedIndicator(expandedIndicator === 'rsi' ? null : 'rsi')}
+                      >
+                        <Ionicons 
+                          name={expandedIndicator === 'rsi' ? "close-circle" : "help-circle"} 
+                          size={18} 
+                          color={colors.success} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <View style={styles.rsiContainer}>
                       <Text style={[styles.rsiValue, { 
                         color: technicalData.rsiSignal === 'OVERBOUGHT' ? '#ef4444' 
@@ -383,63 +404,220 @@ export default function StockDetailScreen() {
                       )}
                     </View>
                   </View>
-                  <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
-                    Índice de Fuerza Relativa. Mide impulso de compra/venta. 
-                    {technicalData.rsi > 70 ? ' Sobrecomprado (posible corrección a la baja)' 
-                     : technicalData.rsi < 30 ? ' Sobrevendido (posible rebote al alza)' 
-                     : ' En rango neutral (30-70)'}
-                  </Text>
+                  
+                  {expandedIndicator === 'rsi' && (
+                    <View style={[styles.helpCard, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                      <Text style={[styles.helpTitle, { color: colors.text }]}>
+                        💡 ¿Qué es el RSI?
+                      </Text>
+                      <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                        El <Text style={{ fontWeight: '600' }}>Índice de Fuerza Relativa</Text> mide la velocidad y magnitud de los cambios de precio.
+                      </Text>
+                      <Text style={[styles.helpText, { color: colors.subtitle, marginTop: 8 }]}>
+                        📊 <Text style={{ fontWeight: '600' }}>Cómo interpretarlo:</Text>
+                      </Text>
+                      <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                        • <Text style={{ color: '#10b981', fontWeight: '600' }}>RSI {'<'} 30:</Text> Sobrevendido (podría subir)
+                      </Text>
+                      <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                        • <Text style={{ fontWeight: '600' }}>RSI 30-70:</Text> Rango neutral
+                      </Text>
+                      <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                        • <Text style={{ color: '#ef4444', fontWeight: '600' }}>RSI {'>'} 70:</Text> Sobrecomprado (podría bajar)
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {!expandedIndicator && (
+                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                      Índice de Fuerza Relativa. Mide impulso de compra/venta. 
+                      {technicalData.rsi > 70 ? ' Sobrecomprado (posible corrección a la baja)' 
+                       : technicalData.rsi < 30 ? ' Sobrevendido (posible rebote al alza)' 
+                       : ' En rango neutral (30-70)'}
+                    </Text>
+                  )}
                 </View>
 
                 {/* SMA 50 */}
                 {technicalData.sma50 !== undefined && technicalData.sma50 !== null && (
                   <View style={styles.technicalItem}>
-                    <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 50</Text>
+                    <View style={styles.indicatorTitleRow}>
+                      <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 50</Text>
+                      <TouchableOpacity 
+                        style={[styles.infoButton, { backgroundColor: `${colors.success}15` }]}
+                        onPress={() => setExpandedIndicator(expandedIndicator === 'sma50' ? null : 'sma50')}
+                      >
+                        <Ionicons 
+                          name={expandedIndicator === 'sma50' ? "close-circle" : "help-circle"} 
+                          size={16} 
+                          color={colors.success} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={[styles.statValue, { color: colors.text }]}>
                       ${technicalData.sma50.toFixed(2)}
                     </Text>
-                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
-                      Media móvil de 50 días. Tendencia a corto plazo
-                    </Text>
+                    {expandedIndicator === 'sma50' ? (
+                      <View style={[styles.helpCard, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                        <Text style={[styles.helpTitle, { color: colors.text }]}>
+                          💡 Media Móvil Simple 50
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          Promedio del precio de cierre de los <Text style={{ fontWeight: '600' }}>últimos 50 días</Text>.
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle, marginTop: 8 }]}>
+                          📈 <Text style={{ fontWeight: '600' }}>Interpretación:</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si el precio está <Text style={{ fontWeight: '600', color: '#10b981' }}>arriba de la SMA50</Text>: Tendencia alcista de corto plazo
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si el precio está <Text style={{ fontWeight: '600', color: '#ef4444' }}>debajo de la SMA50</Text>: Tendencia bajista de corto plazo
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                        Media móvil de 50 días. Tendencia a corto plazo
+                      </Text>
+                    )}
                   </View>
                 )}
 
                 {/* SMA 200 */}
                 {technicalData.sma200 !== undefined && technicalData.sma200 !== null && (
                   <View style={styles.technicalItem}>
-                    <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 200</Text>
+                    <View style={styles.indicatorTitleRow}>
+                      <Text style={[styles.technicalLabel, { color: colors.text }]}>SMA 200</Text>
+                      <TouchableOpacity 
+                        style={[styles.infoButton, { backgroundColor: `${colors.success}15` }]}
+                        onPress={() => setExpandedIndicator(expandedIndicator === 'sma200' ? null : 'sma200')}
+                      >
+                        <Ionicons 
+                          name={expandedIndicator === 'sma200' ? "close-circle" : "help-circle"} 
+                          size={16} 
+                          color={colors.success} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={[styles.statValue, { color: colors.text }]}>
                       ${technicalData.sma200.toFixed(2)}
                     </Text>
-                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
-                      Media móvil de 200 días. Tendencia a largo plazo
-                    </Text>
+                    {expandedIndicator === 'sma200' ? (
+                      <View style={[styles.helpCard, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                        <Text style={[styles.helpTitle, { color: colors.text }]}>
+                          💡 Media Móvil Simple 200
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          Promedio del precio de cierre de los <Text style={{ fontWeight: '600' }}>últimos 200 días</Text>.
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle, marginTop: 8 }]}>
+                          📊 <Text style={{ fontWeight: '600' }}>Interpretación:</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Indica la <Text style={{ fontWeight: '600' }}>tendencia de largo plazo</Text> de la acción
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si SMA50 cruza arriba de SMA200: <Text style={{ fontWeight: '600', color: '#10b981' }}>Señal alcista</Text> (Golden Cross)
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si SMA50 cruza debajo de SMA200: <Text style={{ fontWeight: '600', color: '#ef4444' }}>Señal bajista</Text> (Death Cross)
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                        Media móvil de 200 días. Tendencia a largo plazo
+                      </Text>
+                    )}
                   </View>
                 )}
 
                 {/* Soporte */}
                 {technicalData.support1 !== undefined && technicalData.support1 !== null && (
                   <View style={styles.technicalItem}>
-                    <Text style={[styles.technicalLabel, { color: colors.text }]}>Soporte</Text>
+                    <View style={styles.indicatorTitleRow}>
+                      <Text style={[styles.technicalLabel, { color: colors.text }]}>Soporte</Text>
+                      <TouchableOpacity 
+                        style={[styles.infoButton, { backgroundColor: `${colors.success}15` }]}
+                        onPress={() => setExpandedIndicator(expandedIndicator === 'support' ? null : 'support')}
+                      >
+                        <Ionicons 
+                          name={expandedIndicator === 'support' ? "close-circle" : "help-circle"} 
+                          size={16} 
+                          color={colors.success} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={[styles.statValue, { color: '#10b981' }]}>
                       ${technicalData.support1.toFixed(2)}
                     </Text>
-                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
-                      Nivel de precio donde suele haber demanda de compra
-                    </Text>
+                    {expandedIndicator === 'support' ? (
+                      <View style={[styles.helpCard, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                        <Text style={[styles.helpTitle, { color: colors.text }]}>
+                          💡 Nivel de Soporte
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          Precio donde históricamente aparece <Text style={{ fontWeight: '600', color: '#10b981' }}>demanda fuerte de compra</Text> que impide que baje más.
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle, marginTop: 8 }]}>
+                          📌 <Text style={{ fontWeight: '600' }}>Cómo usarlo:</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Cerca del soporte: <Text style={{ fontWeight: '600' }}>Posible punto de compra</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si rompe el soporte: <Text style={{ fontWeight: '600', color: '#ef4444' }}>Señal de caída</Text> continua
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                        Nivel de precio donde suele haber demanda de compra
+                      </Text>
+                    )}
                   </View>
                 )}
 
                 {/* Resistencia */}
                 {technicalData.resistance1 !== undefined && technicalData.resistance1 !== null && (
                   <View style={styles.technicalItem}>
-                    <Text style={[styles.technicalLabel, { color: colors.text }]}>Resistencia</Text>
+                    <View style={styles.indicatorTitleRow}>
+                      <Text style={[styles.technicalLabel, { color: colors.text }]}>Resistencia</Text>
+                      <TouchableOpacity 
+                        style={[styles.infoButton, { backgroundColor: `${colors.success}15` }]}
+                        onPress={() => setExpandedIndicator(expandedIndicator === 'resistance' ? null : 'resistance')}
+                      >
+                        <Ionicons 
+                          name={expandedIndicator === 'resistance' ? "close-circle" : "help-circle"} 
+                          size={16} 
+                          color={colors.success} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={[styles.statValue, { color: '#ef4444' }]}>
                       ${technicalData.resistance1.toFixed(2)}
                     </Text>
-                    <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
-                      Nivel de precio donde suele haber presión de venta
-                    </Text>
+                    {expandedIndicator === 'resistance' ? (
+                      <View style={[styles.helpCard, { backgroundColor: `${colors.success}10`, borderColor: colors.success }]}>
+                        <Text style={[styles.helpTitle, { color: colors.text }]}>
+                          💡 Nivel de Resistencia
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          Precio donde históricamente aparece <Text style={{ fontWeight: '600', color: '#ef4444' }}>presión de venta fuerte</Text> que impide que suba más.
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle, marginTop: 8 }]}>
+                          📌 <Text style={{ fontWeight: '600' }}>Cómo usarlo:</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Cerca de la resistencia: <Text style={{ fontWeight: '600' }}>Posible toma de ganancias</Text>
+                        </Text>
+                        <Text style={[styles.helpText, { color: colors.subtitle }]}>
+                          • Si rompe la resistencia: <Text style={{ fontWeight: '600', color: '#10b981' }}>Señal de subida</Text> continua (breakout)
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.technicalExplanation, { color: colors.subtitle }]}>
+                        Nivel de precio donde suele haber presión de venta
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
@@ -648,5 +826,35 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 16,
     lineHeight: 24,
+  },
+  // Estilos para botones de ayuda de indicadores
+  indicatorTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  helpCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+  },
+  helpTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  helpText: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 4,
   },
 });

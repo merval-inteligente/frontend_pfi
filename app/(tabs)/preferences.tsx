@@ -9,14 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 interface StockItem {
@@ -57,8 +57,7 @@ export default function PreferencesScreen() {
     try {
       const token = await AsyncStorage.getItem('@auth_token');
       return token;
-    } catch (error) {
-      console.error('Error obteniendo token:', error);
+    } catch {
       return null;
     }
   };
@@ -93,7 +92,6 @@ export default function PreferencesScreen() {
             getStocks(token),
             getUserFavorites(token).catch(error => {
               // Si getUserFavorites falla, continúar con datos vacíos
-              console.warn('⚠️ Error obteniendo favoritos, usando datos vacíos:', error);
               return { favorites: { favoriteStocks: [] }, message: 'Error obteniendo favoritos' };
             })
           ]);
@@ -128,13 +126,11 @@ export default function PreferencesScreen() {
           setStocks(stocksData);
         } else {
           // Usuario no autenticado: limpiar datos silenciosamente
-          console.log('🔓 Usuario no autenticado, limpiando datos de preferencias');
           setSectors([]);
           setStocks([]);
           updateFavorites([]);
         }
-      } catch (error) {
-        console.error('❌ Error cargando datos:', error);
+      } catch {
         
         // Mostrar error al usuario
         setError('Error al cargar los datos del servidor. Por favor, verifica tu conexión e intenta nuevamente.');
@@ -203,8 +199,7 @@ export default function PreferencesScreen() {
                   `${stock.name} (${stock.symbol}) eliminado de tus favoritos`
                 );
               }
-            } catch (error) {
-              console.error('Error eliminando stock de favoritos:', error);
+            } catch {
               Alert.alert(
                 'Error',
                 'Hubo un problema al eliminar de favoritos. Por favor, intenta nuevamente.'
@@ -254,8 +249,7 @@ export default function PreferencesScreen() {
                   `Sector ${sector.name} eliminado de tus favoritos. Se eliminaron ${result.data.removedSymbols?.length || 0} acciones.`
                 );
               }
-            } catch (error) {
-              console.error('Error eliminando sector de favoritos:', error);
+            } catch {
               Alert.alert(
                 'Error',
                 'Hubo un problema al eliminar el sector de favoritos. Por favor, intenta nuevamente.'
@@ -350,8 +344,7 @@ export default function PreferencesScreen() {
                   Alert.alert('Información', result.message);
                 }
               }
-            } catch (error) {
-              console.error('Error agregando a favoritos:', error);
+            } catch {
               Alert.alert(
                 'Error',
                 'Hubo un problema al agregar a favoritos. Por favor, intenta nuevamente.'
@@ -670,13 +663,11 @@ export default function PreferencesScreen() {
                       setStocks(stocksData);
                     } else {
                       // Usuario no autenticado: limpiar datos silenciosamente
-                      console.log('🔓 Usuario no autenticado en retry, limpiando datos de preferencias');
                       setSectors([]);
                       setStocks([]);
                       updateFavorites([]);
                     }
-                  } catch (error) {
-                    console.error('Error cargando datos:', error);
+                  } catch {
                     
                     // Mostrar error al usuario
                     setError('Error al cargar los datos del servidor. Por favor, verifica tu conexión e intenta nuevamente.');

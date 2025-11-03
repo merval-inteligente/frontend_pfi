@@ -44,6 +44,7 @@ export interface NewsItem {
   category: 'market' | 'company' | 'economic' | 'energy' | 'politics';
   sentiment: 'positive' | 'negative' | 'neutral';
   source: string;
+  nivel_adaptacion?: 'principiante' | 'intermedio' | 'avanzado'; // Campo del backend para personalización
 }
 
 export interface MarketData {

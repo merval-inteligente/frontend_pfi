@@ -1,15 +1,15 @@
 // ✅ API Gateway de AWS - Backend deployado
-//const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
+const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
 
 // 🔧 URLs por servicio (todos apuntan al API Gateway)
-//const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
-//const chatApi = AWS_API_GATEWAY; // Chat Service (ruteado por API Gateway)
-//const alertsApi = AWS_API_GATEWAY; // Alerts Service (ruteado por API Gateway)
+const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
+const chatApi = AWS_API_GATEWAY; // Chat Service (ruteado por API Gateway)
+const alertsApi = AWS_API_GATEWAY; // Alerts Service (ruteado por API Gateway)
 
 // 💡 Para desarrollo local, descomenta estas líneas:
- const urlApi = 'http://192.168.0.17:8080/';
- const chatApi = 'http://192.168.0.17:8084/';
- const alertsApi = 'http://192.168.0.17:8000/';
+ //const urlApi = 'http://192.168.0.17:8080/';
+ //const chatApi = 'http://192.168.0.17:8084/';
+ //const alertsApi = 'http://192.168.0.17:8000/';
 
 const urlWebServices = {
   // URL Base para verificaciones de conectividad
