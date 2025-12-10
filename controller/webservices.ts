@@ -1,5 +1,7 @@
 // ✅ API Gateway de AWS - Backend deployado
-const AWS_API_GATEWAY = 'http://api-gateway-alb-1383961063.us-east-1.elb.amazonaws.com/';
+// ...existing code...
+const AWS_API_GATEWAY = 'http://api-gateway-alb-1226808360.us-east-1.elb.amazonaws.com/';
+// ...existing code...
 
 // 🔧 URLs por servicio (todos apuntan al API Gateway)
 const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)

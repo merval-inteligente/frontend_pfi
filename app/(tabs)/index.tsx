@@ -397,7 +397,10 @@ export default function HomeScreen() {
   const [showAllNews, setShowAllNews] = useState(false);
   const [newsSource, setNewsSource] = useState<'backend' | 'mock' | 'none'>('backend');
   const [lastNewsLoad, setLastNewsLoad] = useState<number>(0);
+  const [lastStocksLoad, setLastStocksLoad] = useState<number>(0);
+  const [lastMervalLoad, setLastMervalLoad] = useState<number>(0);
   const [expandedNews, setExpandedNews] = useState<Set<string>>(new Set());
+  const [previousFavorites, setPreviousFavorites] = useState<string[]>([]);
 
   // Función para alternar expansión de una noticia
   const toggleNewsExpansion = (newsId: string) => {
@@ -425,14 +428,23 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      const now = Date.now();
+      const STOCKS_CACHE = 2 * 60 * 1000; // 2 minutos
+      const NEWS_CACHE = 5 * 60 * 1000; // 5 minutos
+      const MERVAL_CACHE = 2 * 60 * 1000; // 2 minutos
+      
       setIsLoading(true);
       
-      // Delay inicial MÁS LARGO para evitar rate limiting (429)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Delay reducido
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Load user's favorite stocks
+      // Load user's favorite stocks (con cache)
       if (isAuthenticated && userFavorites && userFavorites.length > 0) {
-        try {
+        // Solo recargar si pasó tiempo suficiente
+        if (now - lastStocksLoad < STOCKS_CACHE && userStocks.length > 0) {
+          console.log('📊 [CACHE] Usando stocks cacheados');
+        } else {
+          try {
           const token = await getStoredToken();
           if (!token) {
             setUserStocks([]);
@@ -497,15 +509,17 @@ export default function HomeScreen() {
             setUserStocks([]);
           } else {
             setUserStocks(stocksWithPrices);
+            setLastStocksLoad(now);
           }
           
           // 🕐 Delay final antes de cargar noticias
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
             
         } catch (error) {
           console.error('❌ [STOCKS] Error crítico cargando stocks del backend:', error);
           // NO usar mock - mostrar lista vacía y dejar que el usuario sepa que hay un problema
           setUserStocks([]);
+        }
         }
       } else {
         // Usuario no autenticado o sin favoritos
@@ -513,11 +527,10 @@ export default function HomeScreen() {
       }
       
       // Delay adicional antes de cargar noticias
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Load news from backend with caching
-      const now = Date.now();
-      const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos
+      const CACHE_DURATION = NEWS_CACHE;
       
       if (isAuthenticated && (now - lastNewsLoad > CACHE_DURATION)) {
         try {
@@ -593,23 +606,18 @@ export default function HomeScreen() {
       const market = await MarketService.getMarketData();
       setMarketData(market);
       
-      // Load MERVAL real price
-      try {
-        console.error('📊 [DEBUG] Cargando precio real del MERVAL...');
-        const mervalData = await getMervalPrice();
-        if (mervalData.success && mervalData.data) {
-          console.error('📊 [DEBUG] Precio MERVAL obtenido:', {
-            price: mervalData.data.price,
-            change: mervalData.data.change,
-            changePercent: mervalData.data.changePercent
-          });
-          setMervalPrice(mervalData.data.price);
-          setMervalChange(mervalData.data.changePercent);
-        } else {
-          console.error('⚠️ [DEBUG] No se pudo obtener precio del MERVAL, usando mock');
+      // Load MERVAL real price (con cache)
+      if (now - lastMervalLoad > MERVAL_CACHE) {
+        try {
+          const mervalData = await getMervalPrice();
+          if (mervalData.success && mervalData.data) {
+            setMervalPrice(mervalData.data.price);
+            setMervalChange(mervalData.data.changePercent);
+            setLastMervalLoad(now);
+          }
+        } catch (mervalError) {
+          console.error('❌ [DEBUG] Error cargando precio MERVAL:', mervalError);
         }
-      } catch (mervalError) {
-        console.error('❌ [DEBUG] Error cargando precio MERVAL:', mervalError);
       }
       
     } catch (error) {
@@ -617,21 +625,35 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, userFavorites, lastNewsLoad]);
+  }, [isAuthenticated, userFavorites, lastNewsLoad, lastStocksLoad, lastMervalLoad, userStocks.length]);
 
-  // Cargar datos inicial cuando el usuario esté autenticado  
+  // Cargar datos inicial cuando el usuario esté autenticado (una sola vez)
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && userStocks.length === 0) {
+      // Solo cargar si no hay datos todavía
       loadData();
     } else if (!isAuthenticated) {
       // Limpiar datos cuando no esté autenticado
       setUserStocks([]);
       setNews([]);
+      setLastStocksLoad(0);
+      setLastNewsLoad(0);
+      setLastMervalLoad(0);
     }
-  }, [user, isAuthenticated, loadData]);
+  }, [user, isAuthenticated, loadData, userStocks.length]);
 
-  // Recargar stocks cuando cambien los favoritos
+  // Recargar stocks cuando cambien los favoritos (con detección inteligente de cambios)
   useEffect(() => {
+    // Detectar si realmente cambió algo en favoritos (no solo la referencia)
+    const favoritesChanged = JSON.stringify(previousFavorites) !== JSON.stringify(userFavorites);
+    
+    if (!favoritesChanged) {
+      return; // No hacer nada si no cambió
+    }
+    
+    // Actualizar referencia
+    setPreviousFavorites(userFavorites || []);
+    
     if (isAuthenticated && userFavorites && Array.isArray(userFavorites) && userFavorites.length > 0) {
       const reloadStockData = async () => {
         try {
@@ -657,31 +679,63 @@ export default function HomeScreen() {
               return;
             }
             
-            // Obtener precios reales para cada acción
-            const stocksWithPrices = await Promise.all(
-              favoriteSymbols.map(async (stock: any) => {
-                try {
-                  const priceData = await getStockPrice(stock.symbol);
-                  
-                  if (priceData.success && priceData.data && priceData.data.price !== null) {
-                    return {
-                      id: stock.symbol,
-                      symbol: stock.symbol,
-                      name: stock.name,
-                      sector: stock.sector,
-                      currentPrice: priceData.data.price,
-                      percentageChange: priceData.data.changePercent || 0,
-                    };
-                  }
-                  return null;
-                } catch {
-                  return null;
-                }
-              })
-            );
+            // Obtener precios reales para cada acción (optimizado)
+            const stocksWithPrices = [];
             
-            const validStocks = stocksWithPrices.filter((s): s is NonNullable<typeof s> => s !== null);
-            setUserStocks(validStocks);
+            // Primer stock con delay inicial pequeño
+            if (favoriteSymbols.length > 0) {
+              const firstStock = favoriteSymbols[0];
+              try {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                const priceData = await getStockPrice(firstStock.symbol);
+                if (priceData.success && priceData.data && priceData.data.price !== null) {
+                  stocksWithPrices.push({
+                    id: firstStock.symbol,
+                    symbol: firstStock.symbol,
+                    name: firstStock.name,
+                    sector: firstStock.sector,
+                    currentPrice: priceData.data.price,
+                    percentageChange: priceData.data.changePercent || 0,
+                  });
+                }
+              } catch {}
+            }
+            
+            // Resto en paralelo con pequeño delay entre lotes
+            if (favoriteSymbols.length > 1) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              const remainingStocks = await Promise.all(
+                favoriteSymbols.slice(1).map(async (stock: any) => {
+                  try {
+                    const priceData = await getStockPrice(stock.symbol);
+                    
+                    if (priceData.success && priceData.data && priceData.data.price !== null) {
+                      return {
+                        id: stock.symbol,
+                        symbol: stock.symbol,
+                        name: stock.name,
+                        sector: stock.sector,
+                        currentPrice: priceData.data.price,
+                        percentageChange: priceData.data.changePercent || 0,
+                      };
+                    }
+                    return null;
+                  } catch {
+                    return null;
+                  }
+                })
+              );
+              
+              const validRemaining = remainingStocks.filter((s): s is NonNullable<typeof s> => s !== null);
+              stocksWithPrices.push(...validRemaining);
+            }
+            
+            if (stocksWithPrices.length > 0) {
+              setUserStocks(stocksWithPrices);
+              setLastStocksLoad(Date.now());
+            } else {
+              setUserStocks([]);
+            }
           } catch (error) {
             console.error('❌ [RELOAD] Error cargando stocks del backend:', error);
             setUserStocks([]);
@@ -697,13 +751,19 @@ export default function HomeScreen() {
     }
   }, [userFavorites, isAuthenticated]);
 
-  // Refrescar favoritos cuando la pantalla recibe foco
+  // Refrescar favoritos cuando la pantalla recibe foco (con cache inteligente)
   useFocusEffect(
     useCallback(() => {
-      refreshFavorites().catch(error => {
-        console.error('Error refreshing favorites on focus:', error);
-      });
-    }, [refreshFavorites])
+      const now = Date.now();
+      const CACHE_DURATION = 30 * 1000; // 30 segundos de cache
+      
+      // Solo refrescar si pasó suficiente tiempo desde la última carga
+      if (now - lastStocksLoad > CACHE_DURATION) {
+        refreshFavorites().catch(error => {
+          console.error('Error refreshing favorites on focus:', error);
+        });
+      }
+    }, [refreshFavorites, lastStocksLoad])
   );
   
   // 🎯 PERSONALIZACIÓN: Ordenar noticias poniendo primero las de stocks favoritos
