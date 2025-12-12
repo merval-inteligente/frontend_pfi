@@ -1,53 +1,131 @@
 import { getBottomPaddingForTabBar, getHeaderPaddingTop } from '@/components/ResponsiveContainer';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { MervalStock, getDefaultMervalStocks, getStockSectors } from '@/services/mockup';
+import { addToFavorites, getStocks, removeFavoriteStock } from '@/controller/apiController';
+import { MervalStock } from '@/services/mockup';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 export default function ExploreScreen() {
   const router = useRouter();
   const { colorScheme } = useTheme();
+  const { isAuthenticated } = useAuth();
+  const { userFavorites, refreshFavorites } = usePreferencesSync();
   const colors = Colors[colorScheme];
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState('Todos');
-  const [stocks, setStocks] = useState<MervalStock[]>(getDefaultMervalStocks());
+  const [stocks, setStocks] = useState<MervalStock[]>([]);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const sectors = getStockSectors();
+  const [isLoading, setIsLoading] = useState(true);
+  const [sectors, setSectors] = useState<string[]>(['Todos']);
 
-  const toggleFavorite = (stockId: string) => {
-    setStocks(prevStocks => 
-      prevStocks.map(stock => 
-        stock.id === stockId 
-          ? { ...stock, isFavorite: !stock.isFavorite }
-          : stock
-      )
-    );
+  // Cargar stocks desde el backend
+  useEffect(() => {
+    const loadStocks = async () => {
+      if (!isAuthenticated) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const token = await AsyncStorage.getItem('@auth_token');
+        if (!token) return;
+
+        const response = await getStocks(token);
+        if (response.stocks) {
+          // Convertir al formato MervalStock
+          const formattedStocks: MervalStock[] = response.stocks.map((stock: any) => ({
+            id: stock.symbol,
+            symbol: stock.symbol,
+            name: stock.name,
+            sector: stock.sector || 'Sin sector',
+            price: 0, // Se cargará dinámicamente si es necesario
+            change: 0,
+            changePercent: 0,
+            volume: 0,
+            isFavorite: userFavorites.includes(stock.symbol)
+          }));
+          
+          setStocks(formattedStocks);
+          
+          // Extraer sectores únicos
+          const uniqueSectors = ['Todos', ...new Set(formattedStocks.map(s => s.sector).filter(Boolean))];
+          setSectors(uniqueSectors);
+        }
+      } catch (error) {
+        console.error('Error cargando stocks:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadStocks();
+  }, [isAuthenticated, userFavorites]);
+
+  const toggleFavorite = async (stockSymbol: string) => {
+    if (!isAuthenticated) {
+      Alert.alert('Error', 'Debes iniciar sesión para gestionar favoritos');
+      return;
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('@auth_token');
+      if (!token) return;
+
+      const stock = stocks.find(s => s.symbol === stockSymbol);
+      const isCurrentlyFavorite = userFavorites.includes(stockSymbol);
+
+      if (isCurrentlyFavorite) {
+        // Quitar de favoritos
+        await removeFavoriteStock(token, stockSymbol);
+        Alert.alert('Éxito', `${stock?.symbol} eliminada de tus preferencias`);
+      } else {
+        // Agregar a favoritos
+        const result = await addToFavorites(stockSymbol, token);
+        if (result.alreadyExists) {
+          Alert.alert('Info', result.message);
+        } else {
+          Alert.alert('Éxito', `${stock?.symbol} agregada a tus preferencias`);
+        }
+      }
+
+      // Refrescar favoritos desde el backend
+      await refreshFavorites();
+      
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      Alert.alert('Error', error.message || 'No se pudo actualizar las preferencias');
+    }
   };
 
   const filteredStocks = stocks.filter(stock => {
     const matchesSearch = stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          stock.symbol.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSector = selectedSector === 'Todos' || stock.sector === selectedSector;
-    const matchesFavorites = !showOnlyFavorites || stock.isFavorite;
+    const matchesFavorites = !showOnlyFavorites || userFavorites.includes(stock.symbol);
     
     return matchesSearch && matchesSector && matchesFavorites;
   });
 
-  const handleAddToPreferences = (stock: MervalStock) => {
-    const isAlreadyInPreferences = stock.isFavorite;
+  const handleAddToPreferences = async (stock: MervalStock) => {
+    const isAlreadyInPreferences = userFavorites.includes(stock.symbol);
     const action = isAlreadyInPreferences ? 'quitar de' : 'agregar a';
     const actionText = isAlreadyInPreferences ? 'Quitar' : 'Agregar';
     
@@ -58,13 +136,7 @@ export default function ExploreScreen() {
         { text: 'Cancelar', style: 'cancel' },
         { 
           text: actionText, 
-          onPress: () => {
-            toggleFavorite(stock.id);
-            Alert.alert(
-              'Éxito', 
-              `${stock.symbol} ${isAlreadyInPreferences ? 'eliminada de' : 'agregada a'} tus preferencias`
-            );
-          }
+          onPress: () => toggleFavorite(stock.symbol)
         }
       ]
     );
@@ -78,7 +150,10 @@ export default function ExploreScreen() {
     }).format(price);
   };
 
-  const StockCard = ({ stock }: { stock: MervalStock }) => (
+  const StockCard = ({ stock }: { stock: MervalStock }) => {
+    const isFavorite = userFavorites.includes(stock.symbol);
+    
+    return (
     <View style={[styles.stockCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.stockHeader}>
         <View style={styles.stockInfo}>
@@ -88,12 +163,12 @@ export default function ExploreScreen() {
         </View>
         <TouchableOpacity 
           style={styles.favoriteButton}
-          onPress={() => toggleFavorite(stock.id)}
+          onPress={() => toggleFavorite(stock.symbol)}
         >
           <Ionicons 
-            name={stock.isFavorite ? 'heart' : 'heart-outline'} 
+            name={isFavorite ? 'heart' : 'heart-outline'} 
             size={22} 
-            color={stock.isFavorite ? '#FF6B6B' : colors.subtitle} 
+            color={isFavorite ? '#FF6B6B' : colors.subtitle} 
           />
         </TouchableOpacity>
       </View>
@@ -127,21 +202,21 @@ export default function ExploreScreen() {
       </View>
 
       <TouchableOpacity 
-        style={[styles.preferenceButton, { backgroundColor: stock.isFavorite ? '#F87171' : colors.tint }]}
+        style={[styles.preferenceButton, { backgroundColor: isFavorite ? '#F87171' : colors.tint }]}
         onPress={() => handleAddToPreferences(stock)}
       >
         <Ionicons 
-          name={stock.isFavorite ? 'remove-circle' : 'add-circle'} 
+          name={isFavorite ? 'remove-circle' : 'add-circle'} 
           size={16} 
           color="white" 
           style={{ marginRight: 6 }}
         />
         <Text style={styles.preferenceButtonText}>
-          {stock.isFavorite ? 'Quitar' : 'Agregar'}
+          {isFavorite ? 'Quitar' : 'Agregar'}
         </Text>
       </TouchableOpacity>
     </View>
-  );
+  );};
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
@@ -214,7 +289,12 @@ export default function ExploreScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: getBottomPaddingForTabBar() }}
       >
-        {filteredStocks.length > 0 ? (
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.tint} />
+            <Text style={[styles.loadingText, { color: colors.subtitle }]}>Cargando stocks...</Text>
+          </View>
+        ) : filteredStocks.length > 0 ? (
           <View style={styles.stocksGrid}>
             {filteredStocks.map((stock) => (
               <StockCard key={stock.id} stock={stock} />
@@ -420,5 +500,15 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
   },
 });

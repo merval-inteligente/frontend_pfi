@@ -651,105 +651,93 @@ export default function HomeScreen() {
       return; // No hacer nada si no cambió
     }
     
+    // Detectar qué cambió exactamente
+    const previousSet = new Set(previousFavorites || []);
+    const currentSet = new Set(userFavorites || []);
+    
+    const added = [...currentSet].filter(x => !previousSet.has(x));
+    const removed = [...previousSet].filter(x => !currentSet.has(x));
+    
+    console.log('🔄 Favoritos cambiados:', { added, removed });
+    
     // Actualizar referencia
     setPreviousFavorites(userFavorites || []);
     
-    if (isAuthenticated && userFavorites && Array.isArray(userFavorites) && userFavorites.length > 0) {
-      const reloadStockData = async () => {
+    // Si solo se quitaron stocks, simplemente filtrar el array existente (sin delay)
+    if (added.length === 0 && removed.length > 0) {
+      console.log('➖ Solo se quitaron stocks, filtrando...');
+      setUserStocks(prevStocks => prevStocks.filter(stock => !removed.includes(stock.symbol)));
+      return;
+    }
+    
+    // Si se agregaron stocks, cargar solo los nuevos (optimizado)
+    if (added.length > 0 && isAuthenticated) {
+      const loadNewStocks = async () => {
         try {
           const token = await getStoredToken();
-          if (!token) {
-            setUserStocks([]);
-            return;
-          }
+          if (!token) return;
           
-          try {
-            const stocksResponse = await getStocks(token);
-            
-            if (!stocksResponse || !stocksResponse.stocks) {
-              setUserStocks([]);
-              return;
-            }
-            
-            const favoriteSymbols = stocksResponse.stocks
-              .filter((stock: any) => userFavorites.includes(stock.symbol));
-            
-            if (favoriteSymbols.length === 0) {
-              setUserStocks([]);
-              return;
-            }
-            
-            // Obtener precios reales para cada acción (optimizado)
-            const stocksWithPrices = [];
-            
-            // Primer stock con delay inicial pequeño
-            if (favoriteSymbols.length > 0) {
-              const firstStock = favoriteSymbols[0];
+          console.log('➕ Cargando nuevos stocks:', added);
+          
+          // Obtener info básica de todos los stocks
+          const stocksResponse = await getStocks(token);
+          if (!stocksResponse || !stocksResponse.stocks) return;
+          
+          // Filtrar solo los stocks agregados
+          const newStocksInfo = stocksResponse.stocks.filter((stock: any) => 
+            added.includes(stock.symbol)
+          );
+          
+          // Cargar precios para los nuevos stocks (paralelo)
+          const newStocksWithPrices = await Promise.all(
+            newStocksInfo.map(async (stock: any) => {
               try {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                const priceData = await getStockPrice(firstStock.symbol);
+                const priceData = await getStockPrice(stock.symbol);
+                
                 if (priceData.success && priceData.data && priceData.data.price !== null) {
-                  stocksWithPrices.push({
-                    id: firstStock.symbol,
-                    symbol: firstStock.symbol,
-                    name: firstStock.name,
-                    sector: firstStock.sector,
+                  return {
+                    id: stock.symbol,
+                    symbol: stock.symbol,
+                    name: stock.name,
+                    sector: stock.sector,
                     currentPrice: priceData.data.price,
                     percentageChange: priceData.data.changePercent || 0,
-                  });
+                  };
                 }
-              } catch {}
-            }
-            
-            // Resto en paralelo con pequeño delay entre lotes
-            if (favoriteSymbols.length > 1) {
-              await new Promise(resolve => setTimeout(resolve, 200));
-              const remainingStocks = await Promise.all(
-                favoriteSymbols.slice(1).map(async (stock: any) => {
-                  try {
-                    const priceData = await getStockPrice(stock.symbol);
-                    
-                    if (priceData.success && priceData.data && priceData.data.price !== null) {
-                      return {
-                        id: stock.symbol,
-                        symbol: stock.symbol,
-                        name: stock.name,
-                        sector: stock.sector,
-                        currentPrice: priceData.data.price,
-                        percentageChange: priceData.data.changePercent || 0,
-                      };
-                    }
-                    return null;
-                  } catch {
-                    return null;
-                  }
-                })
-              );
-              
-              const validRemaining = remainingStocks.filter((s): s is NonNullable<typeof s> => s !== null);
-              stocksWithPrices.push(...validRemaining);
-            }
-            
-            if (stocksWithPrices.length > 0) {
-              setUserStocks(stocksWithPrices);
-              setLastStocksLoad(Date.now());
-            } else {
-              setUserStocks([]);
-            }
-          } catch (error) {
-            console.error('❌ [RELOAD] Error cargando stocks del backend:', error);
-            setUserStocks([]);
+                return null;
+              } catch {
+                return null;
+              }
+            })
+          );
+          
+          const validNewStocks = newStocksWithPrices.filter((s): s is NonNullable<typeof s> => s !== null);
+          
+          if (validNewStocks.length > 0) {
+            // Agregar los nuevos stocks al array existente y quitar los removidos
+            setUserStocks(prevStocks => {
+              const filtered = prevStocks.filter(stock => !removed.includes(stock.symbol));
+              return [...filtered, ...validNewStocks];
+            });
+          } else if (removed.length > 0) {
+            // Si no hay nuevos stocks válidos pero sí removidos, solo filtrar
+            setUserStocks(prevStocks => prevStocks.filter(stock => !removed.includes(stock.symbol)));
           }
+          
         } catch (error) {
-          console.error('❌ [RELOAD] Error inesperado:', error);
-          setUserStocks([]);
+          console.error('❌ Error cargando nuevos stocks:', error);
         }
       };
-      reloadStockData();
-    } else if (userFavorites && Array.isArray(userFavorites) && userFavorites.length === 0) {
+      
+      loadNewStocks();
+      return;
+    }
+    
+    // Si los favoritos están vacíos, limpiar
+    if (!userFavorites || userFavorites.length === 0) {
       setUserStocks([]);
     }
-  }, [userFavorites, isAuthenticated]);
+  }, [userFavorites, isAuthenticated, previousFavorites]);
 
   // Refrescar favoritos cuando la pantalla recibe foco (con cache inteligente)
   useFocusEffect(
