@@ -8,16 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 
@@ -30,7 +30,7 @@ export default function StockDetailScreen() {
   
   // 🎯 PERSONALIZACIÓN: Verificar si mostrar análisis técnico avanzado
   const shouldShowAdvancedMetrics = () => {
-    const knowledge = user?.investmentKnowledge || 'intermedio';
+    const knowledge = (user?.investmentKnowledge || 'intermedio').toLowerCase();
     return knowledge === 'avanzado' || knowledge === 'intermedio';
   };
   
@@ -59,8 +59,6 @@ export default function StockDetailScreen() {
   const loadStockData = async () => {
     try {
       if (typeof symbol === 'string') {
-        console.error(`📊 [STOCK-DETAIL] Cargando datos para: ${symbol}`);
-        
         // 🔄 PASO 1: Intentar obtener datos del backend PRIMERO
         let backendStockData: any = null;
         let priceData: any = null;
@@ -77,30 +75,13 @@ export default function StockDetailScreen() {
                 (s: any) => s.symbol === symbol || s.symbol === symbol.toUpperCase()
               );
               
-              if (backendStockData) {
-                console.error(`✅ [STOCK-DETAIL] Stock encontrado en backend:`, {
-                  symbol: backendStockData.symbol,
-                  name: backendStockData.name,
-                  sector: backendStockData.sector
-                });
-              } else {
-                console.error(`⚠️ [STOCK-DETAIL] Stock ${symbol} no encontrado en lista del backend`);
-              }
+              // Stock encontrado o no en backend
             }
             
             // Obtener precio real del backend
             priceData = await getStockPrice(symbol);
             
             if (priceData.success && priceData.data) {
-              console.error(`✅ [STOCK-DETAIL] Precio real obtenido:`, {
-                symbol,
-                price: priceData.data.price,
-                change: priceData.data.changePercent,
-                volume: priceData.data.volume,
-                high: priceData.data.high,
-                low: priceData.data.low
-              });
-              
               // Guardar estadísticas adicionales
               setAdditionalStats({
                 high: priceData.data.high,
@@ -114,13 +95,6 @@ export default function StockDetailScreen() {
             const technicalAnalysis = await getStockTechnical(symbol);
             
             if (technicalAnalysis.success && technicalAnalysis.data) {
-              console.error(`✅ [STOCK-DETAIL] Análisis técnico obtenido:`, {
-                symbol,
-                rsi: technicalAnalysis.data.indicators?.rsi,
-                rsiSignal: technicalAnalysis.data.indicators?.rsiSignal,
-                sma50: technicalAnalysis.data.movingAverages?.sma50
-              });
-              
               setTechnicalData({
                 rsi: technicalAnalysis.data.indicators?.rsi,
                 rsiSignal: technicalAnalysis.data.indicators?.rsiSignal,
@@ -129,12 +103,10 @@ export default function StockDetailScreen() {
                 support1: technicalAnalysis.data.support?.level1,
                 resistance1: technicalAnalysis.data.resistance?.level1
               });
-            } else {
-              console.error(`⚠️ [STOCK-DETAIL] No se pudo obtener análisis técnico`);
             }
           }
         } catch (backendError) {
-          console.error(`⚠️ [STOCK-DETAIL] Error obteniendo datos del backend:`, backendError);
+          // Error obteniendo datos del backend
         }
         
         // 🔄 PASO 2: Intentar obtener datos mock como complemento
@@ -170,24 +142,13 @@ export default function StockDetailScreen() {
             description: mockStockData?.description || `Información de ${backendStockData?.name || symbol}`,
           };
           
-          console.error(`✅ [STOCK-DETAIL] Stock combinado creado:`, {
-            symbol: combinedStock.symbol,
-            name: combinedStock.name,
-            price: combinedStock.currentPrice,
-            hasBackendData: !!backendStockData,
-            hasPriceData: !!priceData?.success,
-            hasMockData: !!mockStockData
-          });
-          
           setStock(combinedStock);
         } else {
           // No se encontró en ningún lado
-          console.error(`❌ [STOCK-DETAIL] No se encontraron datos para: ${symbol}`);
           setStock(null);
         }
       }
     } catch (error) {
-      console.error('❌ [STOCK-DETAIL] Error loading stock data:', error);
       setStock(null);
     } finally {
       setIsLoading(false);
@@ -357,12 +318,25 @@ export default function StockDetailScreen() {
           </View>
 
           {/* Technical Analysis - Solo para usuarios intermedios/avanzados */}
-          {shouldShowAdvancedMetrics() && technicalData.rsi !== undefined && (
+          {shouldShowAdvancedMetrics() && (
             <View style={[styles.technicalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Análisis Técnico</Text>
               <Text style={[styles.technicalDescription, { color: colors.subtitle }]}>
-                Indicadores de análisis técnico basados en datos históricos
+                {technicalData.rsi !== undefined 
+                  ? 'Indicadores de análisis técnico basados en datos históricos'
+                  : 'Análisis técnico no disponible para este stock en este momento'}
               </Text>
+              
+              {technicalData.rsi === undefined && (
+                <View style={[styles.noDataContainer, { backgroundColor: colors.background, marginTop: 16, padding: 16, borderRadius: 8 }]}>
+                  <Ionicons name="analytics-outline" size={32} color={colors.subtitle} style={{ marginBottom: 8 }} />
+                  <Text style={[styles.noDataText, { color: colors.subtitle, textAlign: 'center' }]}>
+                    Los indicadores técnicos se cargarán cuando haya suficientes datos históricos disponibles.
+                  </Text>
+                </View>
+              )}
+              
+              {technicalData.rsi !== undefined && (
               
               <View style={styles.technicalGrid}>
                 {/* RSI */}
@@ -621,6 +595,7 @@ export default function StockDetailScreen() {
                   </View>
                 )}
               </View>
+              )}
             </View>
           )}
 

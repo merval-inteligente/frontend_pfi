@@ -1,7 +1,12 @@
 // ✅ API Gateway de AWS - Backend deployado
-// ...existing code...
+// ⚠️ ENTORNO DE LABORATORIO - Usando HTTP (no recomendado para producción)
+// 
+// ADVERTENCIA DE SEGURIDAD:
+// - Las credenciales se envían sin encriptar (visible en herramientas de desarrollo)
+// - Solo usar en entornos de desarrollo/laboratorio controlados
+// - Para producción: configurar dominio propio + certificado SSL en AWS Certificate Manager
+//
 const AWS_API_GATEWAY = 'http://api-gateway-alb-1226808360.us-east-1.elb.amazonaws.com/';
-// ...existing code...
 
 // 🔧 URLs por servicio (todos apuntan al API Gateway)
 const urlApi = AWS_API_GATEWAY; // General Service (Auth, Users, Preferences)
@@ -43,6 +48,9 @@ const urlWebServices = {
   getUserFavorites: urlApi + 'api/user/preferences', // GET - Ver favoritos (solo símbolos)
   addStockToFavorites: urlApi + 'api/user/preferences/stocks/favorite', // POST - Agregar 1 favorito
   addSectorToFavorites: urlApi + 'api/user/preferences/stocks/favorite/sector', // POST - Agregar sector completo
+  
+  // 🆕 Sentimiento de mercado basado en análisis de Twitter
+  getSymbolsSentiment: urlApi + 'symbols-sentiment', // GET - Sentimiento de todos los símbolos
   
   // 🗑️ Eliminar favoritos
   removeFavoriteStock: urlApi + 'api/user/preferences/stocks/favorite', // DELETE /:symbol

@@ -188,7 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error(response.message || 'Error en el login');
       }
     } catch (error) {
-      console.error('Error en login:', error);
+      // No loguear error para evitar exponer información sensible
       throw error;
     } finally {
       setIsLoading(false);

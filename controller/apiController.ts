@@ -45,6 +45,31 @@ const clearUserCache = (userId?: string): void => {
 };
 
 // Interfaces para tipos
+interface SymbolSentiment {
+  _id: string;
+  symbol: string;
+  sector: string;
+  overall_sentiment: 'positivo' | 'negativo' | 'neutral' | 'mixto';
+  sentiment_counts: {
+    positivo?: number;
+    negativo?: number;
+    neutral?: number;
+  };
+  sentiment_percentages: {
+    positivo?: number;
+    negativo?: number;
+    neutral?: number;
+  };
+  total_tweets: number;
+  confidence_score: number;
+  last_updated: string;
+}
+
+interface SymbolsSentimentResponse {
+  total_symbols: number;
+  symbols: SymbolSentiment[];
+}
+
 interface RemoveFavoriteStockResponse {
   status: number;
   message: string;
@@ -2169,3 +2194,57 @@ export const testNewsEndpoint = async () => {
   
 };
 
+// =============================================================================
+// 📊 SENTIMIENTO DE MERCADO - Análisis basado en Twitter
+// =============================================================================
+
+/**
+ * Obtiene el sentimiento de mercado de todos los símbolos basado en análisis de tweets
+ * @returns {Promise<SymbolsSentimentResponse>} Sentimiento de todos los símbolos del MERVAL
+ */
+export const getSymbolsSentiment = async (): Promise<{
+  success: boolean;
+  data?: SymbolsSentimentResponse;
+  error?: string;
+}> => {
+  const cacheKey = 'symbols_sentiment';
+  
+  // Cache de 2 minutos para sentimiento (se actualiza con frecuencia)
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
+  const url = urlWebServices.getSymbolsSentiment;
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data: SymbolsSentimentResponse = await response.json();
+
+    const result = {
+      success: true,
+      data: data
+    };
+    
+    // Guardar en cache por 2 minutos (120 segundos)
+    saveToCache(cacheKey, result, 120000);
+    
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al obtener sentimiento de símbolos'
+    };
+  }
+};

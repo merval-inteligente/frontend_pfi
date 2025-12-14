@@ -5,13 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 // Estados del flujo de recuperación
@@ -52,19 +52,21 @@ export default function ForgotPasswordScreen() {
 
       const response = await requestPasswordReset(email);
 
-      Alert.alert(
-        'Email enviado',
-        'Hemos enviado un código de verificación a tu email. Revisa tu bandeja de entrada.',
-        [
-          {
-            text: 'OK',
-            onPress: () => setCurrentStep('verification')
-          }
-        ]
-      );
+      setIsLoading(false);
+      
+      // Primero cambiar el paso, luego mostrar el alert
+      setCurrentStep('verification');
+      
+      setTimeout(() => {
+        Alert.alert(
+          'Email enviado',
+          'Hemos enviado un código de verificación a tu email. Revisa tu bandeja de entrada.'
+        );
+      }, 100);
 
     } catch (error) {
       console.error('❌ Error al enviar email:', error);
+      setIsLoading(false);
       
       let errorMessage = 'No se pudo enviar el email de recuperación. Inténtalo de nuevo.';
       if (error instanceof Error && error.message) {
@@ -94,19 +96,21 @@ export default function ForgotPasswordScreen() {
 
       const response = await verifyResetCode(email, verificationCode);
 
-      Alert.alert(
-        'Código verificado',
-        'Código correcto. Ahora puedes establecer tu nueva contraseña.',
-        [
-          {
-            text: 'OK',
-            onPress: () => setCurrentStep('newPassword')
-          }
-        ]
-      );
+      setIsLoading(false);
+      
+      // Primero cambiar el paso, luego mostrar el alert
+      setCurrentStep('newPassword');
+      
+      setTimeout(() => {
+        Alert.alert(
+          'Código verificado',
+          'Código correcto. Ahora puedes establecer tu nueva contraseña.'
+        );
+      }, 100);
 
     } catch (error) {
       console.error('❌ Error al verificar código:', error);
+      setIsLoading(false);
       
       let errorMessage = 'Código incorrecto o expirado. Inténtalo de nuevo.';
       if (error instanceof Error && error.message) {

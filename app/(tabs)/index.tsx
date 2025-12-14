@@ -3,7 +3,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferencesSync } from '@/contexts/PreferencesSyncContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getMervalPrice, getNews, getStockPrice, getStocks } from '@/controller/apiController';
+import { getMervalPrice, getNews, getStockPrice, getStocks, getSymbolsSentiment } from '@/controller/apiController';
 import { MarketData, MarketService, NewsItem as MockNewsItem, Stock } from '@/services/mockData';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,21 +45,79 @@ interface BackendNewsItem {
   link?: string;
 }
 
-const StockItem = ({ stock }: { stock: Stock }) => {
+// Interfaz para sentimiento de símbolos
+interface SymbolSentiment {
+  symbol: string;
+  overall_sentiment: 'positivo' | 'negativo' | 'neutral' | 'mixto';
+  confidence_score: number;
+  total_tweets: number;
+  sentiment_percentages: {
+    positivo?: number;
+    negativo?: number;
+    neutral?: number;
+  };
+}
+
+const StockItem = ({ stock, twitterSentiment }: { stock: Stock; twitterSentiment?: SymbolSentiment }) => {
   const { colorScheme } = useTheme();
   const colors = Colors[colorScheme];
   
-  // Determinar color del sentimiento basado en el cambio porcentual
+  // 📊 USAR SENTIMIENTO DE TWITTER como principal (si está disponible)
+  // Fallback: cambio porcentual si no hay datos de Twitter
   const getSentimentColor = () => {
-    if (stock.percentageChange > 0) return '#10b981'; // Verde para positivo
-    if (stock.percentageChange < 0) return '#ef4444'; // Rojo para negativo
-    return colors.subtitle; // Gris neutral
+    // Prioridad 1: Sentimiento de Twitter
+    if (twitterSentiment && twitterSentiment.total_tweets > 0) {
+      switch(twitterSentiment.overall_sentiment) {
+        case 'positivo':
+          return '#10b981';
+        case 'negativo':
+          return '#ef4444';
+        case 'mixto':
+          return '#f59e0b';
+        case 'neutral':
+        default:
+          return '#64748b';
+      }
+    }
+    
+    // Fallback: Cambio porcentual
+    if (stock.percentageChange > 0) return '#10b981';
+    if (stock.percentageChange < 0) return '#ef4444';
+    return colors.subtitle;
   };
   
   const getSentimentText = () => {
+    // Prioridad 1: Sentimiento de Twitter
+    if (twitterSentiment && twitterSentiment.total_tweets > 0) {
+      switch(twitterSentiment.overall_sentiment) {
+        case 'positivo':
+          return 'Positivo';
+        case 'negativo':
+          return 'Negativo';
+        case 'mixto':
+          return 'Mixto';
+        case 'neutral':
+        default:
+          return 'Neutral';
+      }
+    }
+    
+    // Fallback: Cambio porcentual
     if (stock.percentageChange > 0) return 'Positivo';
     if (stock.percentageChange < 0) return 'Negativo';
     return 'Neutral';
+  };
+  
+  // 📊 Obtener ancho de la barra basado en sentimiento de Twitter
+  const getSentimentBarWidth = () => {
+    if (!twitterSentiment || twitterSentiment.total_tweets === 0) {
+      // Fallback: usar cambio porcentual
+      return `${Math.min(Math.abs(stock.percentageChange) * 10, 100)}%`;
+    }
+    
+    // Usar el score de confianza multiplicado por 100 (0-100%)
+    const width = Math.min(twitterSentiment.confidence_score * 100, 100);
+    return `${width}%`;
   };
   
   const handlePress = () => {
@@ -96,7 +154,7 @@ const StockItem = ({ stock }: { stock: Stock }) => {
         <View style={styles.stockProgressInfo}>
           <View style={[styles.progressBarContainer, { backgroundColor: colorScheme === 'dark' ? '#434f40' : '#e9ecef' }]}>
             <View style={[styles.progressBar, { 
-              width: `${Math.abs(stock.percentageChange) * 10}%`, 
+              width: getSentimentBarWidth(), 
               backgroundColor: getSentimentColor() 
             }]} />
           </View>
@@ -141,7 +199,11 @@ const NewsCard = ({
     };
 
     const getDate = (backendNews: BackendNewsItem): string => {
-      return backendNews.scrapingDate || backendNews.publicationDate || backendNews.fecha_scrapeo || backendNews.date || backendNews.createdAt || backendNews.publishedAt || '';
+      // Los campos del backend: published_date, scraped_at, o adaptation_generated_at
+      return backendNews.published_date || 
+             backendNews.scraped_at || 
+             backendNews.adaptation_generated_at ||
+             '';
     };
 
     const getCompanies = (backendNews: BackendNewsItem): string[] => {
@@ -243,36 +305,34 @@ const NewsCard = ({
           })()}
         </TouchableOpacity>
         <View style={styles.newsFooter}>
-          {/* Indicador de nivel de adaptación */}
-          {backendNews.adaptationLevel !== undefined && backendNews.adaptationLevel !== null && (
-            <View style={[styles.adaptationLevelBadge, { 
-              backgroundColor: backendNews.adaptationLevel <= 2 ? '#10b981' + '15' : 
-                               backendNews.adaptationLevel <= 4 ? '#fbbf24' + '15' : 
-                               '#ef4444' + '15',
-              borderColor: backendNews.adaptationLevel <= 2 ? '#10b981' : 
-                          backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
-                          '#ef4444'
+          {/* Indicador de nivel de adaptación - Siempre visible ya que todas las noticias tienen un nivel asignado */}
+          <View style={[styles.adaptationLevelBadge, { 
+            backgroundColor: (backendNews.adaptationLevel || 3) <= 2 ? '#10b981' + '15' : 
+                             (backendNews.adaptationLevel || 3) === 3 ? '#fbbf24' + '15' : 
+                             '#ef4444' + '15',
+            borderColor: (backendNews.adaptationLevel || 3) <= 2 ? '#10b981' : 
+                        (backendNews.adaptationLevel || 3) === 3 ? '#fbbf24' : 
+                        '#ef4444'
+          }]}>
+            <Ionicons 
+              name={(backendNews.adaptationLevel || 3) <= 2 ? 'school-outline' : 
+                   (backendNews.adaptationLevel || 3) === 3 ? 'book-outline' : 
+                   'library-outline'} 
+              size={12} 
+              color={(backendNews.adaptationLevel || 3) <= 2 ? '#10b981' : 
+                    (backendNews.adaptationLevel || 3) === 3 ? '#fbbf24' : 
+                    '#ef4444'} 
+            />
+            <Text style={[styles.adaptationLevelText, { 
+              color: (backendNews.adaptationLevel || 3) <= 2 ? '#10b981' : 
+                    (backendNews.adaptationLevel || 3) === 3 ? '#fbbf24' : 
+                    '#ef4444' 
             }]}>
-              <Ionicons 
-                name={backendNews.adaptationLevel <= 2 ? 'school-outline' : 
-                     backendNews.adaptationLevel <= 4 ? 'book-outline' : 
-                     'library-outline'} 
-                size={12} 
-                color={backendNews.adaptationLevel <= 2 ? '#10b981' : 
-                      backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
-                      '#ef4444'} 
-              />
-              <Text style={[styles.adaptationLevelText, { 
-                color: backendNews.adaptationLevel <= 2 ? '#10b981' : 
-                      backendNews.adaptationLevel <= 4 ? '#fbbf24' : 
-                      '#ef4444' 
-              }]}>
-                {backendNews.adaptationLevel <= 2 ? 'Básico' : 
-                 backendNews.adaptationLevel <= 4 ? 'Intermedio' : 
-                 'Avanzado'}
-              </Text>
-            </View>
-          )}
+              {(backendNews.adaptationLevel || 3) <= 2 ? 'Básico' : 
+               (backendNews.adaptationLevel || 3) === 3 ? 'Intermedio' : 
+               'Avanzado'}
+            </Text>
+          </View>
           <View style={[styles.newsImpact, { backgroundColor: '#64748b' + '15' }]}>
             <Ionicons 
               name="newspaper-outline" 
@@ -401,6 +461,7 @@ export default function HomeScreen() {
   const [lastMervalLoad, setLastMervalLoad] = useState<number>(0);
   const [expandedNews, setExpandedNews] = useState<Set<string>>(new Set());
   const [previousFavorites, setPreviousFavorites] = useState<string[]>([]);
+  const [symbolsSentiment, setSymbolsSentiment] = useState<Map<string, SymbolSentiment>>(new Map());
 
   // Función para alternar expansión de una noticia
   const toggleNewsExpansion = (newsId: string) => {
@@ -432,17 +493,15 @@ export default function HomeScreen() {
       const STOCKS_CACHE = 2 * 60 * 1000; // 2 minutos
       const NEWS_CACHE = 5 * 60 * 1000; // 5 minutos
       const MERVAL_CACHE = 2 * 60 * 1000; // 2 minutos
+      const SENTIMENT_CACHE = 3 * 60 * 1000; // 3 minutos
       
       setIsLoading(true);
-      
-      // Delay reducido
-      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Load user's favorite stocks (con cache)
       if (isAuthenticated && userFavorites && userFavorites.length > 0) {
         // Solo recargar si pasó tiempo suficiente
         if (now - lastStocksLoad < STOCKS_CACHE && userStocks.length > 0) {
-          console.log('📊 [CACHE] Usando stocks cacheados');
+          // Usando cache
         } else {
           try {
           const token = await getStoredToken();
@@ -455,7 +514,6 @@ export default function HomeScreen() {
           const stocksResponse = await getStocks(token);
           
           if (!stocksResponse || !stocksResponse.stocks) {
-            console.error('⚠️ [STOCKS] Respuesta inválida del backend');
             setUserStocks([]);
             return;
           }
@@ -469,15 +527,14 @@ export default function HomeScreen() {
             return;
           }
           
-          // Obtener precios con DELAYS entre requests para evitar rate limiting
+          // Obtener precios con delay mínimo entre requests
           const stocksWithPrices = [];
           for (let i = 0; i < favoriteSymbols.length; i++) {
             const stock = favoriteSymbols[i];
             try {
-              // Delay progresivo entre cada request (500ms base + 200ms por cada stock)
+              // Delay mínimo para evitar rate limiting
               if (i > 0) {
-                const delay = 500 + (i * 200);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise(resolve => setTimeout(resolve, 100));
               }
               
               const priceData = await getStockPrice(stock.symbol);
@@ -497,11 +554,9 @@ export default function HomeScreen() {
                   dividend: 0,
                   description: '',
                 });
-              } else {
-                console.warn(`⚠️ [STOCK] ${stock.symbol}: respuesta inválida del backend`);
               }
             } catch (error) {
-              console.error(`❌ [STOCK] Error obteniendo precio de ${stock.symbol}:`, error);
+              // Silenciar error individual de precio
             }
           }
           
@@ -511,12 +566,9 @@ export default function HomeScreen() {
             setUserStocks(stocksWithPrices);
             setLastStocksLoad(now);
           }
-          
-          // 🕐 Delay final antes de cargar noticias
-          await new Promise(resolve => setTimeout(resolve, 1000));
             
         } catch (error) {
-          console.error('❌ [STOCKS] Error crítico cargando stocks del backend:', error);
+          // Error cargando stocks
           // NO usar mock - mostrar lista vacía y dejar que el usuario sepa que hay un problema
           setUserStocks([]);
         }
@@ -526,9 +578,6 @@ export default function HomeScreen() {
         setUserStocks([]);
       }
       
-      // Delay adicional antes de cargar noticias
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
       // Load news from backend with caching
       const CACHE_DURATION = NEWS_CACHE;
       
@@ -536,7 +585,6 @@ export default function HomeScreen() {
         try {
           const token = await getStoredToken();
           if (!token) {
-            console.error('⚠️ [NEWS] No hay token disponible, usando mock');
             throw new Error('No token available');
           }
           
@@ -555,10 +603,8 @@ export default function HomeScreen() {
             } catch (fetchError) {
               retryCount++;
               if (retryCount > maxRetries) {
-                console.error(`❌ [NEWS] Falló después de ${maxRetries} reintentos`);
                 throw fetchError;
               }
-              console.error(`⚠️ [NEWS] Reintento ${retryCount}/${maxRetries} en 1s...`);
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
           }
@@ -577,6 +623,13 @@ export default function HomeScreen() {
               const content = news.resumen || news.contenido || news.summary || news.content || news.description || news.body;
               
               return news && title && content;
+            }).map((news: any) => {
+              // Asegurar que todas las noticias tengan un adaptationLevel
+              // El backend envía nivel_adaptacion (1-5)
+              return {
+                ...news,
+                adaptationLevel: news.nivel_adaptacion ?? news.adaptationLevel ?? news.adaptation_level ?? 3
+              };
             });
             
             if (validNews.length > 0) {
@@ -616,7 +669,7 @@ export default function HomeScreen() {
             setLastMervalLoad(now);
           }
         } catch (mervalError) {
-          console.error('❌ [DEBUG] Error cargando precio MERVAL:', mervalError);
+          // Error cargando MERVAL
         }
       }
       
@@ -658,14 +711,11 @@ export default function HomeScreen() {
     const added = [...currentSet].filter(x => !previousSet.has(x));
     const removed = [...previousSet].filter(x => !currentSet.has(x));
     
-    console.log('🔄 Favoritos cambiados:', { added, removed });
-    
     // Actualizar referencia
     setPreviousFavorites(userFavorites || []);
     
     // Si solo se quitaron stocks, simplemente filtrar el array existente (sin delay)
     if (added.length === 0 && removed.length > 0) {
-      console.log('➖ Solo se quitaron stocks, filtrando...');
       setUserStocks(prevStocks => prevStocks.filter(stock => !removed.includes(stock.symbol)));
       return;
     }
@@ -676,8 +726,6 @@ export default function HomeScreen() {
         try {
           const token = await getStoredToken();
           if (!token) return;
-          
-          console.log('➕ Cargando nuevos stocks:', added);
           
           // Obtener info básica de todos los stocks
           const stocksResponse = await getStocks(token);
@@ -725,7 +773,7 @@ export default function HomeScreen() {
           }
           
         } catch (error) {
-          console.error('❌ Error cargando nuevos stocks:', error);
+          // Error cargando nuevos stocks
         }
       };
       
@@ -753,6 +801,35 @@ export default function HomeScreen() {
       }
     }, [refreshFavorites, lastStocksLoad])
   );
+
+  // 📊 Cargar sentimiento de Twitter independientemente (efecto separado) - ANTES de cualquier return
+  useEffect(() => {
+    const loadTwitterSentiment = async () => {
+      if (symbolsSentiment.size === 0) {
+        try {
+          const sentimentResponse = await getSymbolsSentiment();
+          
+          if (sentimentResponse.success && sentimentResponse.data) {
+            const sentimentMap = new Map<string, SymbolSentiment>();
+            sentimentResponse.data.symbols.forEach(s => {
+              sentimentMap.set(s.symbol, {
+                symbol: s.symbol,
+                overall_sentiment: s.overall_sentiment,
+                confidence_score: s.confidence_score,
+                total_tweets: s.total_tweets,
+                sentiment_percentages: s.sentiment_percentages
+              });
+            });
+            setSymbolsSentiment(sentimentMap);
+          }
+        } catch (error) {
+          // Error cargando Twitter sentiment
+        }
+      }
+    };
+    
+    loadTwitterSentiment();
+  }, []); // Solo ejecutar una vez al montar el componente
   
   // 🎯 PERSONALIZACIÓN: Ordenar noticias poniendo primero las de stocks favoritos
   const sortNewsByFavorites = (newsArray: (MockNewsItem | BackendNewsItem)[]) => {
@@ -773,55 +850,39 @@ export default function HomeScreen() {
 
   // 🎯 PERSONALIZACIÓN: Filtrar y ordenar noticias según nivel de adaptación del usuario
   const filterNewsByAdaptationLevel = (newsArray: (MockNewsItem | BackendNewsItem)[]) => {
-    // Obtener nivel de conocimiento del usuario del backend (1-5)
-    const userKnowledge = user?.investmentKnowledge || 'intermedio';
+    // Obtener nivel de conocimiento del usuario
+    const userKnowledge = (user?.investmentKnowledge || 'intermedio').toLowerCase();
     
-    // Mapear nivel de conocimiento a nivel de adaptación preferido (1-5)
-    let preferredLevel = 3; // Por defecto intermedio
-    if (userKnowledge === 'principiante') {
-      preferredLevel = 1; // Principiante: prefiere nivel 1, acepta hasta 2
+    // Mapear el conocimiento del usuario a nivel numérico del backend
+    // Backend usa nivel_adaptacion: 1 (básico) a 5 (muy avanzado)
+    let targetLevel: number;
+    
+    if (userKnowledge === 'principiante' || userKnowledge === 'basico') {
+      targetLevel = 1; // Nivel básico
     } else if (userKnowledge === 'intermedio') {
-      preferredLevel = 3; // Intermedio: prefiere nivel 3, acepta hasta 4
+      targetLevel = 3; // Nivel intermedio
     } else if (userKnowledge === 'avanzado') {
-      preferredLevel = 5; // Avanzado: prefiere nivel 5
+      targetLevel = 4; // Nivel avanzado
+    } else {
+      targetLevel = 3; // Por defecto intermedio
     }
     
-    // Agrupar noticias por título/contenido para eliminar duplicados
-    const newsMap = new Map<string, BackendNewsItem>();
+    // Filtrar noticias para mostrar SOLO las del nivel apropiado
+    // Esto evita duplicados de la misma noticia en diferentes niveles
+    const filteredNews = newsArray
+      .map((newsItem) => {
+        const backendNews = newsItem as BackendNewsItem;
+        return {
+          ...backendNews,
+          adaptationLevel: backendNews.nivel_adaptacion ?? backendNews.adaptationLevel ?? 3
+        };
+      })
+      .filter((newsItem) => {
+        // Mostrar solo noticias que coincidan con el nivel del usuario
+        return newsItem.adaptationLevel === targetLevel;
+      });
     
-    newsArray.forEach((newsItem) => {
-      const backendNews = newsItem as BackendNewsItem;
-      const title = backendNews.title || backendNews.titulo || '';
-      
-      // Usar título como clave única
-      const key = title.toLowerCase().trim();
-      
-      if (!key) return; // Ignorar noticias sin título
-      
-      const existingNews = newsMap.get(key);
-      const currentLevel = backendNews.adaptationLevel || preferredLevel;
-      
-      if (!existingNews) {
-        // Primera vez que vemos esta noticia
-        newsMap.set(key, backendNews);
-      } else {
-        // Ya existe esta noticia, decidir cuál versión mantener
-        const existingLevel = existingNews.adaptationLevel || preferredLevel;
-        
-        // Calcular qué versión está más cerca del nivel preferido del usuario
-        const currentDistance = Math.abs(currentLevel - preferredLevel);
-        const existingDistance = Math.abs(existingLevel - preferredLevel);
-        
-        if (currentDistance < existingDistance) {
-          // La versión actual está más cerca del nivel del usuario
-          newsMap.set(key, backendNews);
-        }
-      }
-    });
-    
-    const uniqueNews = Array.from(newsMap.values());
-    
-    return uniqueNews;
+    return filteredNews;
   };
 
   // 🎯 PERSONALIZACIÓN: Mensaje sugerido según perfil de riesgo
@@ -1168,7 +1229,11 @@ export default function HomeScreen() {
         {displayedStocks && displayedStocks.length > 0 ? (
           <>
             {displayedStocks.map((stock) => (
-              <StockItem key={stock.id} stock={stock} />
+              <StockItem 
+                key={stock.id} 
+                stock={stock} 
+                twitterSentiment={symbolsSentiment.get(stock.symbol)}
+              />
             ))}
             
             {userStocks && userStocks.length > 3 && (
